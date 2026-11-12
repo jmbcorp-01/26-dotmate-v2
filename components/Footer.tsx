@@ -12,6 +12,7 @@ export default function Footer() {
               .AX {s.name}
             </Link>
           ))}
+          <Link href="/portfolio/">포트폴리오</Link>
           <Link href="/diagnosis/">무료 .AX 진단</Link>
         </nav>
         <p className="fine">© {new Date().getFullYear()} dotmate. 낡은 시스템을 AI 시스템으로.</p>

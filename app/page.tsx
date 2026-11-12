@@ -2,6 +2,7 @@ import Link from "next/link";
 import { services } from "@/lib/services";
 import AxName from "@/components/AxName";
 import CtaBand from "@/components/CtaBand";
+import Phrase from "@/components/Phrase";
 
 const stats = [
   { value: "71.4%", label: "AI 도입이 필요하다고 답한 중소기업" },
@@ -29,7 +30,9 @@ export default function Home() {
             <br />
             AI 시스템으로.
           </h1>
-          <p className="hero-sub">쇼핑몰, ERP, 앱, 홈페이지. 닷메이트가 AX로 다시 만듭니다.</p>
+          <p className="hero-sub">
+            <Phrase text="쇼핑몰, ERP, 앱, 홈페이지.|닷메이트가 AX로 다시 만듭니다." />
+          </p>
           <div className="hero-actions">
             <Link href="/diagnosis/" className="btn btn-lg">
               무료 .AX 진단 받기
@@ -46,7 +49,9 @@ export default function Home() {
           <h2 className="statement">
             필요한 건 압니다.
             <br />
-            <span className="muted">어디서부터 할지 모를 뿐입니다.</span>
+            <span className="muted">
+              <Phrase text="어디서부터 할지|모를 뿐입니다." />
+            </span>
           </h2>
           <div className="stats">
             {stats.map((s) => (
@@ -65,7 +70,7 @@ export default function Home() {
           <h2>
             AI를 붙이지 않습니다.
             <br />
-            시스템을 AI로 다시 만듭니다.
+            <Phrase text="시스템을 AI로|다시 만듭니다." />
           </h2>
           <p>
             중소기업이 AI 도입에서 가장 많이 막히는 곳은 지금 쓰는 시스템에 맞추는 일입니다. 닷메이트는 웹, 앱, 쇼핑몰, 사내 시스템을 직접 만들어 온 팀입니다. 그래서 낡은 시스템에 AI 기능을 덧대는 대신, 처음부터 AI가 일하는 구조로 다시 만듭니다.
@@ -80,7 +85,9 @@ export default function Home() {
             {services.map((s) => (
               <Link key={s.slug} href={`/services/${s.slug}/`} className="svc-card">
                 <AxName name={s.name} className="svc-card-name" />
-                <p className="svc-card-q">{s.question}</p>
+                <p className="svc-card-q">
+                  <Phrase text={s.question} />
+                </p>
                 <p className="svc-card-sum">{s.summary}</p>
                 <span className="svc-card-more">
                   자세히 보기 <span aria-hidden="true">›</span>
@@ -107,8 +114,8 @@ export default function Home() {
       </section>
 
       <CtaBand
-        title="우리 회사 시스템은 몇 년 전에 멈춰 있나요?"
-        body="무료 .AX 진단으로 AI로 바뀌는 업무와 비용을 먼저 확인해 보세요."
+        title="우리 회사 시스템은|몇 년 전에 멈춰 있나요?"
+        body="무료 .AX 진단으로|AI로 바뀌는 업무와 비용을 먼저 확인해 보세요."
       />
     </>
   );

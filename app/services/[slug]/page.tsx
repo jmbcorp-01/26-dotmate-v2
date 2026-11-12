@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { services, getService } from "@/lib/services";
+import { services, getService, plain } from "@/lib/services";
+import Phrase from "@/components/Phrase";
 import AxName from "@/components/AxName";
 import CtaBand from "@/components/CtaBand";
 
@@ -17,7 +18,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const s = getService(slug);
   if (!s) return {};
-  return { title: `.AX ${s.name}`, description: `${s.question} ${s.summary}.` };
+  return { title: `.AX ${s.name}`, description: `${plain(s.question)} ${s.summary}.` };
 }
 
 export default async function ServicePage({ params }: Props) {
@@ -32,7 +33,9 @@ export default async function ServicePage({ params }: Props) {
       <section className="svc-hero">
         <div className="wrap svc-hero-inner">
           <AxName name={s.name} className="svc-hero-name" />
-          <h1>{s.question}</h1>
+          <h1>
+            <Phrase text={s.question} />
+          </h1>
           <p className="hero-sub">{s.summary}.</p>
           <div className="hero-actions">
             <Link href="/diagnosis/" className="btn btn-lg">
@@ -64,7 +67,9 @@ export default async function ServicePage({ params }: Props) {
               </ul>
             </div>
           </div>
-          <p className="outcome">{s.outcome}</p>
+          <p className="outcome">
+            <Phrase text={s.outcome} />
+          </p>
         </div>
       </section>
 
@@ -108,8 +113,8 @@ export default async function ServicePage({ params }: Props) {
       </section>
 
       <CtaBand
-        title={`우리 ${s.system}, AI로 바꾸면 뭐가 달라질까요?`}
-        body="지금 쓰는 시스템을 알려주시면, 바뀌는 업무와 예상 비용을 무료로 정리해 드립니다."
+        title={`우리 ${s.system}, AI로 바꾸면|뭐가 달라질까요?`}
+        body="지금 쓰는 시스템을 알려주시면,|바뀌는 업무와 예상 비용을 무료로 정리해 드립니다."
       />
     </>
   );

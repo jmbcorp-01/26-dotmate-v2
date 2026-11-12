@@ -2,11 +2,11 @@ export type Service = {
   slug: string;
   name: string; // ".AX" 뒤에 붙는 이름
   system: string; // 고객이 부르는 시스템 이름
-  question: string; // 페이지 첫 문장 (고객의 문제)
+  question: string; // 페이지 첫 문장 (고객의 문제). "|"는 줄바꿈 단위(의미 묶음) 표시
   summary: string; // 목록에서 쓰는 한 줄
   now: string[];
   after: string[];
-  outcome: string;
+  outcome: string; // "|" = 의미 묶음 경계
   fit: string[];
   build: { title: string; body: string }[];
 };
@@ -16,7 +16,7 @@ export const services: Service[] = [
     slug: "commerce",
     name: "커머스",
     system: "쇼핑몰",
-    question: "상품 하나 올리는 데 반나절, 아직도요?",
+    question: "상품 하나 올리는 데|반나절, 아직도요?",
     summary: "상품 등록부터 상담, 추천까지 AI가 맡는 쇼핑몰",
     now: [
       "상품 등록과 상세페이지를 사람이 하나씩 만듭니다.",
@@ -28,7 +28,7 @@ export const services: Service[] = [
       "AI 상담이 24시간 먼저 답하고, 필요한 것만 사람에게 넘깁니다.",
       "고객마다 다른 상품을 추천합니다.",
     ],
-    outcome: "운영 인력은 그대로, 매출을 만드는 일에 시간을 씁니다.",
+    outcome: "운영 인력은 그대로,|매출을 만드는 일에 시간을 씁니다.",
     fit: [
       "자사몰을 직접 운영하는 브랜드",
       "상품 수가 많아 등록과 관리에 손이 많이 가는 곳",
@@ -45,7 +45,7 @@ export const services: Service[] = [
     slug: "erp",
     name: "ERP",
     system: "ERP",
-    question: "월말마다 엑셀과 씨름하고 있다면.",
+    question: "월말마다 엑셀과|씨름하고 있다면.",
     summary: "문서를 읽고 입력하고, 물으면 답하는 ERP",
     now: [
       "거래명세서와 발주서를 손으로 옮겨 적습니다.",
@@ -57,7 +57,7 @@ export const services: Service[] = [
       "\"지난달 미수금 알려줘\"라고 물으면 바로 답합니다.",
       "발주와 재고를 미리 예측해서 알려줍니다.",
     ],
-    outcome: "숫자를 모으는 시간이 줄고, 판단은 그날 바로 합니다.",
+    outcome: "숫자를 모으는 시간이 줄고,|판단은 그날 바로 합니다.",
     fit: [
       "엑셀이나 오래된 ERP로 업무를 관리하는 제조·유통사",
       "거래처 문서를 매일 수기로 입력하는 곳",
@@ -74,7 +74,7 @@ export const services: Service[] = [
     slug: "app",
     name: "앱",
     system: "앱",
-    question: "고객은 바뀌었는데 앱은 그대로입니다.",
+    question: "고객은 바뀌었는데|앱은 그대로입니다.",
     summary: "고객을 기억하고 먼저 말을 거는 앱",
     now: [
       "몇 년 전에 만든 예약·주문 앱을 그대로 씁니다.",
@@ -86,7 +86,7 @@ export const services: Service[] = [
       "고객의 지난 기록을 기억해서 다음 행동을 제안합니다.",
       "공지, 푸시, 답변 같은 운영 업무를 AI가 돕습니다.",
     ],
-    outcome: "다시 찾는 고객이 늘고, 유지보수 부담은 줄어듭니다.",
+    outcome: "다시 찾는 고객이 늘고,|유지보수 부담은 줄어듭니다.",
     fit: [
       "예약, 주문, 회원 앱을 운영하는 서비스업",
       "앱 사용자가 줄고 있는 곳",
@@ -103,7 +103,7 @@ export const services: Service[] = [
     slug: "web",
     name: "웹",
     system: "홈페이지",
-    question: "ChatGPT에 우리 회사를 물으면 뭐라고 답할까요?",
+    question: "ChatGPT에 우리 회사를 물으면|뭐라고 답할까요?",
     summary: "AI 검색에 나오고, 24시간 문의를 받는 홈페이지",
     now: [
       "홈페이지는 있지만 검색에도, AI 답변에도 나오지 않습니다.",
@@ -115,7 +115,7 @@ export const services: Service[] = [
       "AI 상담이 24시간 문의를 받아 정리해서 넘겨줍니다.",
       "직원이 직접 내용을 바꿀 수 있습니다.",
     ],
-    outcome: "가장 작은 비용으로 시작하는 첫 AX. 문의가 쌓이기 시작합니다.",
+    outcome: "가장 작은 비용으로 시작하는 첫 AX.|문의가 쌓이기 시작합니다.",
     fit: [
       "회사 소개 홈페이지만 있는 B2B 기업",
       "홈페이지로 들어오는 문의가 거의 없는 곳",
@@ -131,3 +131,6 @@ export const services: Service[] = [
 ];
 
 export const getService = (slug: string) => services.find((s) => s.slug === slug);
+
+/** "|" 표시를 지운 평문 (메타 설명 등에 사용) */
+export const plain = (t: string) => t.replace(/\|/g, " ");
