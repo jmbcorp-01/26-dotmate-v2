@@ -18,7 +18,7 @@ export const site = {
 // 비워 두면 태그가 나가지 않습니다.
 export const verification = {
   google: "",
-  naver: "",
+  naver: "fd1be0680f65434e713b623841470d39e59f744e",
 };
 
 type PageMetaInput = {
