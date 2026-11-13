@@ -907,6 +907,32 @@ ol {
 .footer-nav a:hover {
   color: var(--ink);
 }
+.footer-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  margin: 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.footer-info > div {
+  display: flex;
+  gap: 6px;
+}
+.footer-info dt {
+  font-weight: 600;
+  color: var(--ink);
+}
+.footer-info dd {
+  margin: 0;
+}
+.footer-info a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.footer-info a:hover {
+  color: var(--ink);
+}
 
 /*
  * 모션 — 절제된 등장 효과
