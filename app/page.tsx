@@ -26,9 +26,8 @@ export default function Home() {
             dotmate <AxName name="" />
           </p>
           <h1>
-            낡은 시스템을
-            <br />
-            AI 시스템으로.
+            <span className="line">낡은 시스템을</span>
+            <span className="line">AI 시스템으로.</span>
           </h1>
           <p className="hero-sub">
             <Phrase text="쇼핑몰, ERP, 앱, 홈페이지.|닷메이트가 AX로 다시 만듭니다." />
@@ -56,7 +55,9 @@ export default function Home() {
           <div className="stats">
             {stats.map((s) => (
               <div key={s.value} className="stat">
-                <div className="stat-value">{s.value}</div>
+                <div className="stat-value" data-countup>
+                  {s.value}
+                </div>
                 <div className="stat-label">{s.label}</div>
               </div>
             ))}

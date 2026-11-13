@@ -908,11 +908,188 @@ ol {
   color: var(--ink);
 }
 
+/*
+ * 모션 — 절제된 등장 효과
+ * - 모든 움직임은 0.4~0.8초, 위로 16~24px 이내. 신뢰감이 우선이라 튀는 효과는 쓰지 않습니다.
+ * - <html class="js-motion">일 때만 동작합니다. '동작 줄이기' 사용자와 JS가 없는 환경에서는 그대로 보입니다.
+ * - 스크롤 등장 대상 선택자는 components/Motion.tsx의 REVEAL_SELECTOR와 같아야 합니다.
+ */
+:root {
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.hero h1 .line {
+  display: block;
+}
+
+/* 1) 첫 화면(히어로) 등장: 문장 단위로 차례대로 */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.js-motion :is(.hero, .svc-hero, .diag-intro) :is(.hero-kicker, .svc-hero-name, h1 .line, h1 .phrase, .hero-sub, .hero-actions, .diag-gets) {
+  animation: rise-in 0.8s var(--ease-out) both;
+}
+.js-motion :is(.hero, .svc-hero, .diag-intro) :is(.hero-kicker, .svc-hero-name) {
+  display: inline-block;
+  animation-delay: 0.05s;
+}
+.js-motion :is(.hero, .svc-hero, .diag-intro) h1 :is(.line, .phrase):nth-child(1) {
+  animation-delay: 0.15s;
+}
+.js-motion :is(.hero, .svc-hero, .diag-intro) h1 :is(.line, .phrase):nth-child(2) {
+  animation-delay: 0.27s;
+}
+.js-motion :is(.hero, .svc-hero, .diag-intro) h1 :is(.line, .phrase):nth-child(n + 3) {
+  animation-delay: 0.39s;
+}
+.js-motion :is(.hero, .svc-hero, .diag-intro) .hero-sub {
+  animation-delay: 0.45s;
+}
+.js-motion :is(.hero, .svc-hero, .diag-intro) :is(.hero-actions, .diag-gets) {
+  animation-delay: 0.6s;
+}
+.js-motion .diag-form {
+  animation: rise-in 0.8s var(--ease-out) 0.35s both;
+}
+
+/* 2) 스크롤 등장: 화면에 들어올 때 살짝 올라오며 */
+.js-motion
+  :is(
+    .section-title,
+    .statement,
+    .stat,
+    .source,
+    .belief-inner > *,
+    .svc-card,
+    .step,
+    .cta-inner > *,
+    .compare-col,
+    .outcome,
+    .build-item,
+    .fit-inner > *,
+    .others-title,
+    .others-link,
+    .pf-empty,
+    .pf-card
+  ) {
+  opacity: 0;
+  transform: translateY(20px);
+  transition:
+    opacity 0.7s var(--ease-out) var(--reveal-delay, 0ms),
+    transform 0.7s var(--ease-out) var(--reveal-delay, 0ms),
+    box-shadow 0.3s var(--ease-out);
+}
+.js-motion :is(
+    .section-title,
+    .statement,
+    .stat,
+    .source,
+    .belief-inner > *,
+    .svc-card,
+    .step,
+    .cta-inner > *,
+    .compare-col,
+    .outcome,
+    .build-item,
+    .fit-inner > *,
+    .others-title,
+    .others-link,
+    .pf-empty,
+    .pf-card
+  ).is-in {
+  opacity: 1;
+  transform: none;
+}
+/* 진행 과정: 윗선이 왼쪽에서 그어지듯 */
+.step {
+  border-top-color: transparent;
+  background: linear-gradient(var(--ink), var(--ink)) top left / 100% 2px no-repeat;
+}
+.js-motion .step {
+  background-size: 0% 2px;
+  transition:
+    opacity 0.7s var(--ease-out) var(--reveal-delay, 0ms),
+    transform 0.7s var(--ease-out) var(--reveal-delay, 0ms),
+    background-size 0.8s var(--ease-out) calc(var(--reveal-delay, 0ms) + 0.15s);
+}
+.js-motion .step.is-in {
+  background-size: 100% 2px;
+}
+
+/* 3) 마우스 반응: 미세하게 */
+.btn {
+  transition:
+    background-color 0.2s ease,
+    transform 0.4s var(--ease-out),
+    box-shadow 0.4s var(--ease-out);
+}
+.btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(216, 46, 40, 0.22);
+}
+.btn:active {
+  transform: none;
+  box-shadow: none;
+}
+.text-link span[aria-hidden],
+.svc-card-more span[aria-hidden] {
+  display: inline-block;
+  transition: transform 0.4s var(--ease-out);
+}
+.text-link:hover span[aria-hidden],
+.svc-card:hover .svc-card-more span[aria-hidden] {
+  transform: translateX(4px);
+}
+.svc-card {
+  transition:
+    transform 0.5s var(--ease-out),
+    box-shadow 0.5s var(--ease-out);
+}
+.svc-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.08);
+}
+.js-motion .svc-card.is-in {
+  transition:
+    opacity 0.7s var(--ease-out) var(--reveal-delay, 0ms),
+    transform 0.5s var(--ease-out),
+    box-shadow 0.5s var(--ease-out);
+}
+.js-motion .svc-card.is-in:hover {
+  transform: translateY(-4px);
+}
+
+/* 스크롤 등장 대상 안의 버튼도 마우스 반응은 바로 */
+.js-motion .btn.is-in {
+  transition:
+    opacity 0.7s var(--ease-out) var(--reveal-delay, 0ms),
+    background-color 0.2s ease,
+    transform 0.4s var(--ease-out),
+    box-shadow 0.4s var(--ease-out);
+}
+.js-motion .btn.is-in:hover {
+  transform: translateY(-1px);
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
   }
-  * {
+  *,
+  *::before,
+  *::after {
     transition: none !important;
+    animation: none !important;
+  }
+  .btn:hover,
+  .svc-card:hover {
+    transform: none;
   }
 }
