@@ -44,6 +44,17 @@ NEXT_PUBLIC_FORM_ENDPOINT=https://example.execute-api.ap-northeast-2.amazonaws.c
 - 파비콘·앱 아이콘: `public/icon.svg`, `brand/*.svg` 수정 후 `node scripts/make-icons.mjs` (favicon.ico는 brand/out의 16·32·48 PNG로 만듦)
 - 공유 이미지: 문구 수정 후 `node scripts/make-og.mjs` → `public/og/*.png`
 
+## 예전 사이트 주소 연결
+
+`infra/cloudfront/viewer-request.js` (CloudFront Function `dotmate-web-index-rewrite`)에서 예전 사이트 주소(/solutions, /agents, /insights 등)를 새 페이지로 301 연결합니다. 수정 후:
+
+```
+aws cloudfront describe-function --name dotmate-web-index-rewrite   # ETag 확인
+aws cloudfront update-function --name dotmate-web-index-rewrite --if-match <ETag> \
+  --function-config Comment=dotmate,Runtime=cloudfront-js-2.0 --function-code fileb://infra/cloudfront/viewer-request.js
+aws cloudfront publish-function --name dotmate-web-index-rewrite --if-match <새 ETag>
+```
+
 ## 배포 (예정)
 
 1. `npm run build`
