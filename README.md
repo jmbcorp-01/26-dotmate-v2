@@ -13,6 +13,7 @@
 | `/` | 메인 (히어로, 왜 지금, 서비스 4종, 진행 과정) |
 | `/services/{commerce,erp,app,web}/` | .AX 서비스별 상세 |
 | `/diagnosis/` | 무료 .AX 진단 신청 폼 |
+| `/privacy/` | 개인정보 처리방침 |
 
 서비스 문구는 `lib/services.ts` 한 곳에서 고칩니다. 브랜드 색상과 여백은 `app/globals.css` 맨 위 토큰에 있습니다.
 
@@ -26,7 +27,9 @@ npm run build    # out/ 폴더에 정적 파일 생성
 
 ## 진단 신청 폼 연결
 
-폼은 `NEXT_PUBLIC_FORM_ENDPOINT` 주소로 JSON을 POST합니다. 값이 없으면 "접수 기능이 아직 연결되지 않았습니다"라고 안내합니다. 배포 단계에서 API Gateway + Lambda(메일 발송) 등으로 연결합니다.
+폼은 `NEXT_PUBLIC_FORM_ENDPOINT` 주소(AWS Lambda Function URL)로 JSON을 POST하고, Lambda가 Amazon SES로 dotmate@dotmate.co.kr 에 메일을 보냅니다. 신청 정보는 서버에 저장하지 않고 메일로만 전달됩니다. 코드와 권한 정책은 `infra/diagnosis-form/`, 함수 생성/갱신은 `infra/diagnosis-form/deploy.sh`.
+
+개인정보 처리방침은 `/privacy/` 이고, 보호책임자·보관 기간 등은 `lib/privacy.ts` 한 곳에서 고칩니다(폼 동의 안내에도 같이 반영).
 
 ```bash
 NEXT_PUBLIC_FORM_ENDPOINT=https://example.execute-api.ap-northeast-2.amazonaws.com/diagnosis npm run build

@@ -35,6 +35,11 @@ export default function Footer() {
             </dd>
           </div>
         </dl>
+        <p className="fine">
+          <Link href="/privacy/" className="footer-legal">
+            개인정보 처리방침
+          </Link>
+        </p>
         <p className="fine">© {new Date().getFullYear()} dotmate. 낡은 시스템을 AI 시스템으로.</p>
       </div>
     </footer>
