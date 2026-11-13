@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/site";
 import Link from "next/link";
 import { privacy as p } from "@/lib/privacy";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta({
   title: "개인정보 처리방침",
-  description: "닷메이트의 개인정보 처리방침입니다.",
-};
+  description: "닷메이트가 무료 .AX 진단 신청 등에서 받는 개인정보의 항목, 이용 목적, 보유 기간과 정보주체의 권리를 안내합니다.",
+  path: "/privacy/",
+});
 
 const officerName = p.officer.name ? `${p.officer.name}${p.officer.title ? ` (${p.officer.title})` : ""}` : "(확인 중)";
 

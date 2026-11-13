@@ -5,7 +5,7 @@ export default function Footer() {
   return (
     <footer className="site-footer">
       <div className="wrap footer-inner">
-        <img src="/logo.png" alt=".mate" width={72} height={19} />
+        <img src="/logo.png" alt="닷메이트" width={72} height={19} />
         <nav className="footer-nav" aria-label="하단 메뉴">
           {services.map((s) => (
             <Link key={s.slug} href={`/services/${s.slug}/`}>
