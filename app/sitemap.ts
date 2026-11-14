@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { services } from "@/lib/services";
 import { site } from "@/lib/site";
+import { projects } from "@/lib/portfolio";
 
 export const dynamic = "force-static";
 
@@ -18,7 +19,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     page("/", 1, "weekly"),
     ...services.map((s) => page(`/services/${s.slug}/`, 0.9)),
     page("/diagnosis/", 0.8),
-    page("/portfolio/", 0.6),
+    page("/portfolio/", 0.7),
+    ...projects.map((p) => page(`/portfolio/${p.slug}/`, 0.6)),
     page("/privacy/", 0.2, "yearly"),
   ];
 }
