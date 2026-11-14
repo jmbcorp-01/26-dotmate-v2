@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { privacy } from "@/lib/privacy";
 
-// 접수 주소는 배포 환경변수 NEXT_PUBLIC_FORM_ENDPOINT로 연결합니다 (예: AWS API Gateway + Lambda).
+// 접수 주소: AWS Lambda Function URL (infra/diagnosis-form 참고). 값은 .env.production 의 NEXT_PUBLIC_FORM_ENDPOINT.
 const ENDPOINT = process.env.NEXT_PUBLIC_FORM_ENDPOINT;
 const SYSTEMS = ["쇼핑몰", "ERP", "앱", "홈페이지", "기타"];
 
@@ -34,12 +36,24 @@ export default function DiagnosisForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...Object.fromEntries(fd.entries()), systems }),
       });
+      if (res.status === 400) {
+        const body = await res.json().catch(() => ({}));
+        setStatus("error");
+        setError(
+          body.error === "email"
+            ? "이메일 주소를 다시 확인해 주세요."
+            : body.error === "phone"
+              ? "연락처를 숫자로 다시 확인해 주세요."
+              : "입력하지 않은 항목이 있습니다. 확인 후 다시 보내 주세요.",
+        );
+        return;
+      }
       if (!res.ok) throw new Error(String(res.status));
       setStatus("done");
       form.reset();
     } catch {
       setStatus("error");
-      setError("접수 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.");
+      setError(`접수 중 문제가 생겼습니다. 잠시 후 다시 시도하시거나 ${privacy.email} 로 메일 주세요.`);
     }
   }
 
@@ -89,9 +103,34 @@ export default function DiagnosisForm() {
         <span>지금 가장 불편한 점</span>
         <textarea id="pain" name="pain" rows={4} placeholder="예: 상품 등록에 하루 3시간씩 걸립니다." />
       </label>
+      <div className="hp-field" aria-hidden="true">
+        <label>
+          웹사이트
+          <input name="website" tabIndex={-1} autoComplete="off" />
+        </label>
+      </div>
+      <div className="consent" id="consent-notice">
+        <dl>
+          <dt>수집 목적</dt>
+          <dd>{privacy.purpose}</dd>
+          <dt>수집 항목</dt>
+          <dd>
+            필수: {privacy.required.join(", ")} / 선택: {privacy.optional.join(", ")}
+          </dd>
+          <dt>보유 기간</dt>
+          <dd>{privacy.retention}</dd>
+        </dl>
+        <p>
+          동의를 거부할 수 있으며, 거부하시면 진단 신청이 제한됩니다. 자세한 내용은{" "}
+          <Link href="/privacy/" target="_blank">
+            개인정보 처리방침
+          </Link>
+          에서 확인하실 수 있습니다.
+        </p>
+      </div>
       <label className="agree">
-        <input type="checkbox" id="agree" name="agree" required />
-        <span>상담을 위한 개인정보 수집·이용에 동의합니다.</span>
+        <input type="checkbox" id="agree" name="agree" required aria-describedby="consent-notice" />
+        <span>[필수] 위 개인정보 수집·이용에 동의합니다.</span>
       </label>
       {status === "error" && (
         <p className="form-error" role="alert">

@@ -1119,3 +1119,156 @@ ol {
     transform: none;
   }
 }
+
+/* 개인정보 처리방침 */
+.policy {
+  padding-block: 96px var(--section);
+}
+.policy-inner {
+  max-width: 820px;
+}
+.policy h1 {
+  font-size: clamp(36px, 5vw, 56px);
+  line-height: 1.15;
+  font-weight: 800;
+  margin-top: 16px;
+}
+.policy-lead {
+  margin-top: 24px;
+  font-size: 17px;
+  line-height: 1.75;
+  color: var(--gray);
+}
+.policy-toc {
+  margin-top: 40px;
+  background: var(--mist);
+  border-radius: var(--radius);
+  padding: 28px 32px;
+}
+.policy-toc ol {
+  list-style: decimal;
+  padding-left: 22px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 32px;
+  font-size: 15px;
+}
+.policy-toc a:hover {
+  text-decoration: underline;
+}
+.policy-body {
+  margin-top: 24px;
+  font-size: 16px;
+  line-height: 1.8;
+}
+.policy-body h2 {
+  font-size: 21px;
+  font-weight: 800;
+  margin-top: 56px;
+  margin-bottom: 14px;
+  scroll-margin-top: calc(var(--header-h) + 24px);
+}
+.policy-body p + p,
+.policy-body p + ul,
+.policy-body ul + p,
+.policy-body .policy-table + p,
+.policy-body p + .policy-table {
+  margin-top: 14px;
+}
+.policy-body ul {
+  list-style: disc;
+  padding-left: 22px;
+  display: grid;
+  gap: 6px;
+}
+.policy-body a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.policy-table {
+  overflow-x: auto;
+}
+.policy-table table {
+  width: 100%;
+  border-collapse: collapse;
+  border-top: 2px solid var(--ink);
+  font-size: 15px;
+}
+.policy-table th,
+.policy-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.policy-table thead th {
+  background: var(--mist);
+}
+.policy-table tbody th {
+  font-weight: 700;
+  white-space: nowrap;
+  width: 1%;
+}
+.policy-meta {
+  margin-top: 64px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+  color: var(--gray);
+}
+@media (max-width: 640px) {
+  .policy-toc {
+    padding: 22px 20px;
+  }
+  .policy-toc ol {
+    grid-template-columns: 1fr;
+  }
+  .policy-table tbody th {
+    white-space: normal;
+    width: 34%;
+  }
+  .policy-table th,
+  .policy-table td {
+    padding: 10px 10px;
+  }
+}
+
+/* 진단 폼 개인정보 동의 안내 */
+.consent {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px 18px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--gray);
+}
+.consent dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+}
+.consent dt {
+  font-weight: 700;
+  color: var(--ink);
+}
+.consent p {
+  margin-top: 8px;
+}
+.consent a,
+.agree a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.hp-field {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.footer-legal {
+  font-weight: 700;
+  color: var(--ink);
+}
