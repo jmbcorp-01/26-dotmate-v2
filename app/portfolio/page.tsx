@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/site";
 import Link from "next/link";
 import { projects } from "@/lib/portfolio";
 import { services } from "@/lib/services";
@@ -6,10 +7,12 @@ import AxName from "@/components/AxName";
 import Phrase from "@/components/Phrase";
 import CtaBand from "@/components/CtaBand";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta({
   title: "포트폴리오",
-  description: "닷메이트가 만들어 온 쇼핑몰, ERP, 앱, 홈페이지와 AX 전환 사례.",
-};
+  description: "2017년부터 닷메이트가 만들어 온 쇼핑몰, ERP, 앱, 홈페이지 구축 사례와 AI 시스템(AX) 전환 사례를 모았습니다.",
+  path: "/portfolio/",
+  image: "portfolio",
+});
 
 const nameOf = (slug: string) => services.find((s) => s.slug === slug)?.name ?? "";
 

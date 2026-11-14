@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { services, getService, plain } from "@/lib/services";
+import { services, getService } from "@/lib/services";
 import Phrase from "@/components/Phrase";
 import AxName from "@/components/AxName";
 import CtaBand from "@/components/CtaBand";
+import JsonLd from "@/components/JsonLd";
+import { site, pageMeta, orgId } from "@/lib/site";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -18,7 +20,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const s = getService(slug);
   if (!s) return {};
-  return { title: `.AX ${s.name}`, description: `${plain(s.question)} ${s.summary}.` };
+  return pageMeta({ title: s.seoTitle, description: s.seoDescription, path: `/services/${s.slug}/`, image: s.slug });
 }
 
 export default async function ServicePage({ params }: Props) {
@@ -27,9 +29,44 @@ export default async function ServicePage({ params }: Props) {
   if (!s) notFound();
 
   const others = services.filter((o) => o.slug !== s.slug);
+  const url = `${site.url}/services/${s.slug}/`;
+  const ld = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Service",
+        "@id": `${url}#service`,
+        name: `.AX ${s.name}`,
+        alternateName: s.serviceType,
+        serviceType: s.serviceType,
+        description: `${s.summary}. ${s.after.join(" ")}`,
+        url,
+        image: `${site.url}/og/${s.slug}.png`,
+        provider: { "@id": orgId },
+        areaServed: { "@type": "Country", name: "대한민국" },
+        audience: { "@type": "BusinessAudience", audienceType: s.fit.join(", ") },
+        hasOfferCatalog: {
+          "@type": "OfferCatalog",
+          name: `.AX ${s.name}에서 만드는 것`,
+          itemListElement: s.build.map((b) => ({
+            "@type": "Offer",
+            itemOffered: { "@type": "Service", name: b.title, description: b.body },
+          })),
+        },
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "홈", item: `${site.url}/` },
+          { "@type": "ListItem", position: 2, name: `.AX ${s.name}`, item: url },
+        ],
+      },
+    ],
+  };
 
   return (
     <>
+      <JsonLd data={ld} />
       <section className="svc-hero">
         <div className="wrap svc-hero-inner">
           <AxName name={s.name} className="svc-hero-name" />

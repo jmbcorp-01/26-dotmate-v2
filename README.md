@@ -35,6 +35,26 @@ npm run build    # out/ 폴더에 정적 파일 생성
 NEXT_PUBLIC_FORM_ENDPOINT=https://example.execute-api.ap-northeast-2.amazonaws.com/diagnosis npm run build
 ```
 
+## 검색 노출 (SEO / GEO)
+
+- 회사 정보, 검색엔진 소유 확인 코드: `lib/site.ts` (`verification.google`, `verification.naver`에 코드만 넣고 배포)
+- 페이지별 제목·설명·대표 주소·공유 카드: 각 페이지의 `pageMeta()` 호출, 서비스는 `lib/services.ts`의 `seoTitle`, `seoDescription`
+- 자주 묻는 질문: `lib/faq.ts` (메인 화면, FAQ 구조화 데이터, `/llms.txt`에 함께 쓰임)
+- 자동 생성: `/sitemap.xml`, `/robots.txt`, `/manifest.webmanifest`, `/llms.txt` (AI 검색용 회사 요약)
+- 파비콘·앱 아이콘: `public/icon.svg`, `brand/*.svg` 수정 후 `node scripts/make-icons.mjs` (favicon.ico는 brand/out의 16·32·48 PNG로 만듦)
+- 공유 이미지: 문구 수정 후 `node scripts/make-og.mjs` → `public/og/*.png`
+
+## 예전 사이트 주소 연결
+
+`infra/cloudfront/viewer-request.js` (CloudFront Function `dotmate-web-index-rewrite`)에서 예전 사이트 주소(/solutions, /agents, /insights 등)를 새 페이지로 301 연결합니다. 수정 후:
+
+```
+aws cloudfront describe-function --name dotmate-web-index-rewrite   # ETag 확인
+aws cloudfront update-function --name dotmate-web-index-rewrite --if-match <ETag> \
+  --function-config Comment=dotmate,Runtime=cloudfront-js-2.0 --function-code fileb://infra/cloudfront/viewer-request.js
+aws cloudfront publish-function --name dotmate-web-index-rewrite --if-match <새 ETag>
+```
+
 ## 배포 (예정)
 
 1. `npm run build`

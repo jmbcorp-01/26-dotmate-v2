@@ -3,6 +3,48 @@ import { services } from "@/lib/services";
 import AxName from "@/components/AxName";
 import CtaBand from "@/components/CtaBand";
 import Phrase from "@/components/Phrase";
+import JsonLd from "@/components/JsonLd";
+import { faqs } from "@/lib/faq";
+import { site, pageMeta, orgId } from "@/lib/site";
+
+export const metadata = pageMeta({
+  description:
+    "쇼핑몰, ERP, 앱, 홈페이지. 2017년부터 시스템을 만들어 온 닷메이트가 중소기업의 낡은 시스템을 AI 시스템으로 다시 만듭니다. 무료 .AX 진단으로 시작하세요.",
+  path: "/",
+});
+
+const homeLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebPage",
+      "@id": `${site.url}/#webpage`,
+      url: `${site.url}/`,
+      name: site.defaultTitle,
+      inLanguage: "ko-KR",
+      isPartOf: { "@id": `${site.url}/#website` },
+      about: { "@id": orgId },
+    },
+    {
+      "@type": "ItemList",
+      name: "닷메이트 .AX 서비스",
+      itemListElement: services.map((s, i) => ({
+        "@type": "ListItem",
+        position: i + 1,
+        name: `.AX ${s.name} (${s.serviceType})`,
+        url: `${site.url}/services/${s.slug}/`,
+      })),
+    },
+    {
+      "@type": "FAQPage",
+      mainEntity: faqs.map((f) => ({
+        "@type": "Question",
+        name: f.q,
+        acceptedAnswer: { "@type": "Answer", text: f.a },
+      })),
+    },
+  ],
+};
 
 const stats = [
   { value: "71.4%", label: "AI 도입이 필요하다고 답한 중소기업" },
@@ -20,6 +62,7 @@ const steps = [
 export default function Home() {
   return (
     <>
+      <JsonLd data={homeLd} />
       <section className="hero">
         <div className="wrap hero-inner">
           <p className="hero-kicker">
@@ -111,6 +154,20 @@ export default function Home() {
               </li>
             ))}
           </ol>
+        </div>
+      </section>
+
+      <section className="faq">
+        <div className="wrap faq-inner">
+          <h2 className="section-title">자주 묻는 질문</h2>
+          <div className="faq-list">
+            {faqs.map((f) => (
+              <details key={f.q} className="faq-item">
+                <summary>{f.q}</summary>
+                <p>{f.a}</p>
+              </details>
+            ))}
+          </div>
         </div>
       </section>
 

@@ -9,6 +9,9 @@ export type Service = {
   outcome: string; // "|" = 의미 묶음 경계
   fit: string[];
   build: { title: string; body: string }[];
+  seoTitle: string; // 검색 결과 제목 (뒤에 " | 닷메이트"가 붙습니다)
+  seoDescription: string; // 검색 결과 설명 (80~120자)
+  serviceType: string; // 구조화 데이터용 서비스 분류
 };
 
 export const services: Service[] = [
@@ -40,6 +43,10 @@ export const services: Service[] = [
       { title: "개인화 추천", body: "구매와 방문 기록을 보고 고객마다 다른 상품을 보여줍니다." },
       { title: "운영 리포트", body: "매출과 재고 흐름을 매일 요약해서 알려줍니다." },
     ],
+    seoTitle: ".AX 커머스 · AI 쇼핑몰 구축",
+    seoDescription:
+      "상품 등록, 상세페이지, 24시간 고객 상담, 개인화 추천을 AI가 맡는 쇼핑몰로 다시 만듭니다. 자사몰 운영 브랜드를 위한 닷메이트 .AX 커머스.",
+    serviceType: "AI 쇼핑몰 구축",
   },
   {
     slug: "erp",
@@ -69,6 +76,10 @@ export const services: Service[] = [
       { title: "예측 알림", body: "재고 부족과 발주 시점을 미리 알려줍니다." },
       { title: "기존 시스템 연동", body: "쓰던 ERP와 엑셀 데이터를 그대로 옮겨옵니다." },
     ],
+    seoTitle: ".AX ERP · AI ERP 구축",
+    seoDescription:
+      "거래명세서·발주서를 AI가 읽어 자동 입력하고, 말로 물으면 숫자로 답하는 ERP. 엑셀과 오래된 ERP를 쓰는 제조·유통사를 위한 닷메이트 .AX ERP.",
+    serviceType: "AI ERP 구축",
   },
   {
     slug: "app",
@@ -98,6 +109,10 @@ export const services: Service[] = [
       { title: "운영 자동화", body: "푸시와 공지, 리뷰 답변 초안을 AI가 만듭니다." },
       { title: "새 기술 기반", body: "수정이 쉬운 구조로 다시 만들어 외주 의존을 줄입니다." },
     ],
+    seoTitle: ".AX 앱 · AI 앱 개발",
+    seoDescription:
+      "예약·주문·회원 앱을 AI 검색, 추천, 상담이 되는 앱으로 다시 만듭니다. 사용자가 줄고 유지보수가 부담인 서비스업을 위한 닷메이트 .AX 앱.",
+    serviceType: "AI 앱 개발",
   },
   {
     slug: "web",
@@ -127,6 +142,10 @@ export const services: Service[] = [
       { title: "쉬운 관리", body: "글과 사진을 직접 바꾸는 관리 화면을 드립니다." },
       { title: "빠른 화면", body: "모바일에서도 바로 열리는 가벼운 사이트로 만듭니다." },
     ],
+    seoTitle: ".AX 웹 · AI 검색에 나오는 홈페이지 제작",
+    seoDescription:
+      "ChatGPT, Perplexity 같은 AI 검색에 회사가 정확히 소개되도록 구조를 짜고, AI 상담으로 24시간 문의를 받는 홈페이지. 닷메이트 .AX 웹.",
+    serviceType: "AI 홈페이지 제작",
   },
 ];
 
