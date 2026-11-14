@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { pageMeta } from "@/lib/site";
 import Link from "next/link";
-import { projects } from "@/lib/portfolio";
+import { sortedProjects } from "@/lib/portfolio";
 import { services } from "@/lib/services";
 import AxName from "@/components/AxName";
 import Phrase from "@/components/Phrase";
@@ -17,7 +17,7 @@ export const metadata: Metadata = pageMeta({
 const nameOf = (slug: string) => services.find((s) => s.slug === slug)?.name ?? "";
 
 export default function PortfolioPage() {
-  const sorted = [...projects].sort((a, b) => b.year - a.year);
+  const sorted = sortedProjects();
 
   return (
     <>
@@ -28,7 +28,7 @@ export default function PortfolioPage() {
             <Phrase text="시스템을 만들어 온 팀이|AI로 다시 만듭니다." />
           </h1>
           <p className="hero-sub">
-            <Phrase text="닷메이트가 직접 만든|쇼핑몰, ERP, 앱, 홈페이지입니다." />
+            <Phrase text="문제가 무엇이었고, 무엇을 바꿨고,|어떤 결과가 났는지 정리했습니다." />
           </p>
         </div>
       </section>
@@ -50,20 +50,23 @@ export default function PortfolioPage() {
           ) : (
             <div className="pf-grid">
               {sorted.map((p) => (
-                <article key={`${p.client}-${p.title}`} className="pf-card">
+                <Link key={p.slug} href={`/portfolio/${p.slug}/`} className="pf-card">
                   <div className="pf-thumb">
-                    {p.image ? <img src={p.image} alt={`${p.client} ${p.title}`} /> : <span>{p.client}</span>}
+                    {p.image ? <img src={p.image} alt={`${p.client} ${p.title}`} loading="lazy" /> : <span>{p.client}</span>}
                   </div>
                   <div className="pf-meta">
-                    <AxName name={nameOf(p.service)} />
+                    {p.service ? <AxName name={nameOf(p.service)} /> : <span className="pf-cat">{p.category}</span>}
                     <span className="muted">
-                      {p.industry} · {p.year}
+                      {p.client} · {p.period}
                     </span>
                     {p.ax && <span className="pf-badge">AX 전환</span>}
                   </div>
                   <h3>{p.title}</h3>
                   <p className="muted">{p.summary}</p>
-                </article>
+                  <span className="pf-more">
+                    사례 자세히 보기 <span aria-hidden="true">›</span>
+                  </span>
+                </Link>
               ))}
             </div>
           )}

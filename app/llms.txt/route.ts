@@ -1,5 +1,6 @@
 // AI 검색(ChatGPT, Perplexity, Claude 등)이 회사를 정확히 설명하도록 돕는 요약 문서 (/llms.txt)
 // 서비스와 FAQ 데이터에서 만들어지므로 따로 고칠 필요가 없습니다.
+import { projects } from "@/lib/portfolio";
 import { services, plain } from "@/lib/services";
 import { faqs } from "@/lib/faq";
 import { site } from "@/lib/site";
@@ -45,6 +46,7 @@ export function GET() {
     ...services.map((s) => `- [.AX ${s.name}](${site.url}/services/${s.slug}/): ${plain(s.question)}`),
     `- [무료 .AX 진단 신청](${site.url}/diagnosis/)`,
     `- [포트폴리오](${site.url}/portfolio/)`,
+    ...projects.map((p) => `  - [${p.title}](${site.url}/portfolio/${p.slug}/): ${p.client}, ${p.category}, ${p.period}`),
     `- [개인정보 처리방침](${site.url}/privacy/)`,
     "",
   ];

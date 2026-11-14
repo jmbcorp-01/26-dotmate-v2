@@ -939,6 +939,180 @@ ol {
     grid-template-columns: 1fr;
   }
 }
+.pf-card h3,
+.pf-more {
+  transition: color 0.15s ease;
+}
+.pf-card .pf-thumb img {
+  transition: transform 0.5s ease;
+}
+.pf-card:hover .pf-thumb img {
+  transform: scale(1.02);
+}
+.pf-card:hover h3 {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.pf-cat {
+  font-weight: 800;
+}
+.pf-more {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* 포트폴리오 상세 */
+.case-hero {
+  padding-block: 56px 96px;
+}
+.case-back {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--gray);
+}
+.case-back:hover {
+  color: var(--ink);
+}
+.case-head {
+  margin-top: 48px;
+  display: grid;
+  gap: 20px;
+  max-width: 860px;
+}
+.case-head .pf-meta {
+  margin-top: 0;
+  font-size: 17px;
+}
+.case-head h1 {
+  font-size: clamp(36px, 5.6vw, 64px);
+  line-height: 1.15;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+.case-facts {
+  display: grid;
+  grid-template-columns: repeat(5, auto);
+  justify-content: start;
+  gap: 16px 48px;
+  margin: 48px 0 0;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+  font-size: 15px;
+}
+.case-facts dt {
+  color: var(--gray);
+  font-size: 13px;
+  font-weight: 600;
+}
+.case-facts dd {
+  margin: 4px 0 0;
+  font-weight: 700;
+}
+.case-site:hover {
+  text-decoration: underline;
+}
+.case-figure {
+  margin: 48px 0 0;
+}
+.case-figure img {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+}
+.case-figure figcaption {
+  margin-top: 12px;
+  font-size: 14px;
+}
+.case-results {
+  padding-block: var(--section) 0;
+}
+.case-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 40px;
+  margin-top: 64px;
+}
+.case-metrics .stat-label {
+  color: var(--gray);
+}
+.case-result-list {
+  margin-top: 56px;
+}
+.case-result-list li {
+  font-size: clamp(19px, 2.2vw, 24px);
+  line-height: 1.45;
+}
+.case-tech {
+  padding-block: var(--section);
+}
+.case-quote {
+  background: var(--black);
+  color: var(--white);
+  padding-block: var(--section);
+}
+.case-quote figure {
+  margin: 0;
+  max-width: 860px;
+}
+.case-quote blockquote {
+  margin: 0;
+}
+.case-quote blockquote p {
+  font-size: clamp(24px, 3.4vw, 36px);
+  line-height: 1.45;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.case-quote blockquote p::before {
+  content: "\201C";
+  display: block;
+  font-size: 64px;
+  line-height: 1;
+  color: var(--gray);
+  margin-bottom: 8px;
+}
+.case-quote figcaption {
+  margin-top: 32px;
+  color: #a1a1a6;
+  font-size: 16px;
+  font-weight: 600;
+}
+.case-note {
+  font-size: 14px;
+  padding-top: 32px;
+}
+.others-case {
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.others-link:hover .others-case {
+  text-decoration: underline;
+}
+@media (max-width: 860px) {
+  .case-facts {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 734px) {
+  .case-hero {
+    padding-block: 32px 64px;
+  }
+  .case-head {
+    margin-top: 32px;
+  }
+  .case-metrics {
+    grid-template-columns: 1fr 1fr;
+    gap: 32px 20px;
+    margin-top: 40px;
+  }
+  .case-metrics .stat-value {
+    font-size: 44px;
+  }
+}
 
 /* 푸터 */
 .site-footer {
