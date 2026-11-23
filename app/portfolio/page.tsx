@@ -52,7 +52,11 @@ export default function PortfolioPage() {
               {sorted.map((p) => (
                 <Link key={p.slug} href={`/portfolio/${p.slug}/`} className="pf-card">
                   <div className="pf-thumb">
-                    {p.image ? <img src={p.image} alt={`${p.client} ${p.title}`} loading="lazy" /> : <span>{p.client}</span>}
+                    {p.thumb || p.image ? (
+                      <img src={p.thumb ?? p.image} alt={`${p.client} ${p.title}`} loading="lazy" />
+                    ) : (
+                      <span>{p.client}</span>
+                    )}
                   </div>
                   <div className="pf-meta">
                     {p.service ? <AxName name={nameOf(p.service)} /> : <span className="pf-cat">{p.category}</span>}
@@ -60,6 +64,7 @@ export default function PortfolioPage() {
                       {p.client} · {p.period}
                     </span>
                     {p.ax && <span className="pf-badge">AX 전환</span>}
+                    {p.status && <span className="pf-badge pf-badge-status">{p.status}</span>}
                   </div>
                   <h3>{p.title}</h3>
                   <p className="muted">{p.summary}</p>

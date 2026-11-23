@@ -1,5 +1,5 @@
 // 포트폴리오 데이터. 항목을 추가하면 /portfolio 목록과 /portfolio/[slug] 상세 페이지가 자동으로 만들어집니다.
-// image는 public/portfolio/ 아래 파일 경로 (예: "/portfolio/brand-a.jpg"). 16:10 비율을 권장합니다.
+// image(상세 대표 화면)와 thumb(목록 썸네일)는 public/portfolio/ 아래 파일 경로 (예: "/portfolio/brand-a.jpg"). 16:10 비율을 권장합니다.
 export type ServiceSlug = "commerce" | "erp" | "app" | "web";
 
 export type Project = {
@@ -13,10 +13,12 @@ export type Project = {
   period: string; // 화면에 보이는 진행 시기 (예: "2026년 10월")
   title: string; // 프로젝트 한 줄 제목
   summary: string; // 목록 카드에 쓰는 요약
-  image?: string;
+  image?: string; // 상세 페이지 대표 화면 (사이트 캡처)
+  thumb?: string; // 목록 카드 썸네일 (로고 기반, public/portfolio/thumb/). 없으면 image 사용
   imageNote?: string; // 대표 이미지 설명 (예: 비공개 사례의 대체 이미지)
   url?: string; // 공개 사이트 주소
   ax?: boolean; // AX 전환 사례 여부 (기존 구축 사례는 false)
+  status?: string; // 진행 상태 배지 (예: "개발 중"). 완료된 사례는 비워 둠
   problem: string[]; // 고객이 겪던 문제
   solution: string[]; // 닷메이트가 바꾼 점
   metrics?: { value: string; label: string }[]; // 숫자로 보이는 성과
@@ -27,6 +29,50 @@ export type Project = {
 };
 
 export const projects: Project[] = [
+  {
+    slug: "noriva",
+    client: "Noriva",
+    category: "글로벌 웹툰 플랫폼",
+    service: "web",
+    industry: "웹툰·콘텐츠",
+    year: 2026,
+    month: 11,
+    period: "2026년 11월 (개발 중)",
+    title: "한국 역사와 설화를 담은 글로벌 K-웹툰 플랫폼",
+    summary:
+      "시장 분석, 소재 발굴, 저작권 검증, 작화 검증처럼 제작을 늦추던 작업을 AI가 맡아 작품 출시 기간을 70% 이상 줄인 글로벌 웹툰 플랫폼입니다.",
+    image: "/portfolio/noriva.jpg",
+    thumb: "/portfolio/thumb/noriva.png",
+    url: "https://k-noriva.com/",
+    ax: true,
+    status: "개발 중",
+    problem: [
+      "웹툰 한 편을 내려면 시장 분석, 소재 발굴, 작화 검증까지 사람이 처리해야 하는 작업이 많아 곳곳에서 병목이 생겼습니다.",
+      "이 과정에 시간이 너무 많이 들어 작품 출시가 계속 늦어졌고, AI로 빠르게 움직이는 시장 속도를 따라가기 어려웠습니다.",
+    ],
+    solution: [
+      "한국 역사와 설화를 중심으로 한 글로벌 K-웹툰 플랫폼을 구축하고 있습니다.",
+      "시장 분석, 소재 발굴, 저작권 검증, 작화 검증처럼 사람이 하던 제작 지원 업무를 AX로 전환했습니다.",
+      "창작팀은 반복 검토 대신 스토리와 작화에 시간을 쓰도록 제작 흐름을 다시 짰습니다.",
+    ],
+    metrics: [{ value: "70%+", label: "작품 출시 기간 단축" }],
+    results: [
+      "사람이 하던 시장 분석, 소재 발굴, 저작권 검증, 작화 검증을 AI가 맡게 되었습니다.",
+      "창작팀이 스토리와 작화에 더 많은 시간을 쓰면서도, 작품 출시 기간은 기존보다 70% 이상 짧아졌습니다.",
+      "현재 플랫폼 개발을 이어 가고 있습니다.",
+    ],
+    tech: [
+      { title: "시장 분석 에이전트", body: "국내외 웹툰 시장의 장르와 독자 반응을 분석해 어떤 작품이 통할지 판단 근거를 만듭니다." },
+      { title: "소재 발굴 에이전트", body: "한국 역사와 설화 자료에서 작품이 될 만한 인물과 이야기를 찾아 정리합니다." },
+      { title: "저작권·작화 검증", body: "소재와 이미지의 저작권 문제를 미리 점검하고, 캐릭터와 화풍이 일관되게 유지되는지 확인합니다." },
+      { title: "글로벌 플랫폼", body: "한국어와 영어로 작품을 연재하고, 장르와 테마로 작품을 찾을 수 있는 웹툰 서비스를 만듭니다." },
+    ],
+    testimonial: {
+      quote:
+        "작품 하나를 내기까지 분석과 검증에 쓰는 시간이 가장 큰 부담이었습니다. 그 일을 AI가 맡으면서 저희는 이야기와 그림에 집중할 수 있게 되었고, 작품을 선보이는 속도도 눈에 띄게 빨라졌습니다.",
+      author: "Noriva 운영 담당자",
+    },
+  },
   {
     slug: "matchum",
     client: "(주)제이엠비코퍼레이션",
@@ -40,6 +86,7 @@ export const projects: Project[] = [
     summary:
       "쇼피파이의 각종 수수료를 걷어내고 자체 글로벌 이커머스로 전환했습니다. 상품 등록부터 수출 신고, 배송까지 AI 에이전트가 맡아 운영 업무가 90% 이상 줄었습니다.",
     image: "/portfolio/matchum.jpg",
+    thumb: "/portfolio/thumb/matchum.png",
     url: "https://trymatchum.com/",
     ax: true,
     problem: [
@@ -86,6 +133,7 @@ export const projects: Project[] = [
     summary:
       "수기로 관리하던 아이들의 입·퇴실을 앱 플랫폼으로 전환했습니다. 기록은 자동으로 남고, 선생님은 행정 대신 아이들에게 더 집중합니다.",
     image: "/portfolio/alion.jpg",
+    thumb: "/portfolio/thumb/alion.png",
     url: "https://alionhub.com/",
     ax: true,
     problem: [
@@ -127,6 +175,7 @@ export const projects: Project[] = [
     summary:
       "중간 유통 단계를 줄여 농가 수익을 높이는 B2B 농산물 경매 플랫폼입니다. 1년으로 예상되던 과업을 기획부터 출시까지 2개월 만에 마쳤습니다.",
     image: "/portfolio/nongbujangteo.jpg",
+    thumb: "/portfolio/thumb/nongbujangteo.png",
     url: "https://nongbujangteo.kr/",
     ax: true,
     problem: [
@@ -172,6 +221,7 @@ export const projects: Project[] = [
     summary:
       "향수 브랜드 KYDE(카이드)의 카페24 전용 스킨과 시그니처 향 추천 퀴즈를 AI로 2주 만에 만들어, 예정된 런칭 일정을 지켰습니다.",
     image: "/portfolio/kyde.jpg",
+    thumb: "/portfolio/thumb/kyde.png",
     url: "https://kyde.kr/",
     ax: true,
     problem: [
@@ -211,6 +261,7 @@ export const projects: Project[] = [
     summary:
       "전업 트레이더 고객의 매매 기법을 하네스 에이전트 방식으로 옮겨, 10여 개의 AI 에이전트가 시장 분석부터 매매까지 자동으로 운용합니다.",
     image: "/portfolio/ai-trading.jpg",
+    thumb: "/portfolio/thumb/ai-trading.png",
     imageNote: "고객 보호를 위해 실제 화면 대신 구성 개념을 담은 이미지를 사용했습니다.",
     ax: true,
     problem: [
