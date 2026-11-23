@@ -1,5 +1,5 @@
 // 포트폴리오 데이터. 항목을 추가하면 /portfolio 목록과 /portfolio/[slug] 상세 페이지가 자동으로 만들어집니다.
-// image는 public/portfolio/ 아래 파일 경로 (예: "/portfolio/brand-a.jpg"). 16:10 비율을 권장합니다.
+// image(상세 대표 화면)와 thumb(목록 썸네일)는 public/portfolio/ 아래 파일 경로 (예: "/portfolio/brand-a.jpg"). 16:10 비율을 권장합니다.
 export type ServiceSlug = "commerce" | "erp" | "app" | "web";
 
 export type Project = {
@@ -13,7 +13,8 @@ export type Project = {
   period: string; // 화면에 보이는 진행 시기 (예: "2026년 10월")
   title: string; // 프로젝트 한 줄 제목
   summary: string; // 목록 카드에 쓰는 요약
-  image?: string;
+  image?: string; // 상세 페이지 대표 화면 (사이트 캡처)
+  thumb?: string; // 목록 카드 썸네일 (로고 기반, public/portfolio/thumb/). 없으면 image 사용
   imageNote?: string; // 대표 이미지 설명 (예: 비공개 사례의 대체 이미지)
   url?: string; // 공개 사이트 주소
   ax?: boolean; // AX 전환 사례 여부 (기존 구축 사례는 false)
@@ -39,8 +40,9 @@ export const projects: Project[] = [
     period: "2026년 11월 (개발 중)",
     title: "한국 역사와 설화를 담은 글로벌 K-웹툰 플랫폼",
     summary:
-      "시장 분석, 소재 발굴, 저작권 검증, 작화 검증처럼 제작을 늦추던 작업을 AI가 맡아, 창작팀이 스토리와 작화에 집중하는 글로벌 웹툰 플랫폼을 만들고 있습니다.",
+      "시장 분석, 소재 발굴, 저작권 검증, 작화 검증처럼 제작을 늦추던 작업을 AI가 맡아 작품 출시 기간을 70% 이상 줄인 글로벌 웹툰 플랫폼입니다.",
     image: "/portfolio/noriva.jpg",
+    thumb: "/portfolio/thumb/noriva.png",
     url: "https://k-noriva.com/",
     ax: true,
     status: "개발 중",
@@ -53,10 +55,10 @@ export const projects: Project[] = [
       "시장 분석, 소재 발굴, 저작권 검증, 작화 검증처럼 사람이 하던 제작 지원 업무를 AX로 전환했습니다.",
       "창작팀은 반복 검토 대신 스토리와 작화에 시간을 쓰도록 제작 흐름을 다시 짰습니다.",
     ],
-    metrics: [{ value: "70%+", label: "작품 출시 성과 개선" }],
+    metrics: [{ value: "70%+", label: "작품 출시 기간 단축" }],
     results: [
       "사람이 하던 시장 분석, 소재 발굴, 저작권 검증, 작화 검증을 AI가 맡게 되었습니다.",
-      "창작팀이 스토리와 작화에 더 많은 시간을 쓰면서, 작품 출시 성과가 기존보다 70% 이상 좋아졌습니다.",
+      "창작팀이 스토리와 작화에 더 많은 시간을 쓰면서도, 작품 출시 기간은 기존보다 70% 이상 짧아졌습니다.",
       "현재 플랫폼 개발을 이어 가고 있습니다.",
     ],
     tech: [
@@ -72,47 +74,6 @@ export const projects: Project[] = [
     },
   },
   {
-    slug: "matchum-engine",
-    client: "Matchum",
-    category: "글로벌 이커머스",
-    service: "commerce",
-    industry: "K-뷰티 글로벌 커머스",
-    year: 2026,
-    month: 11,
-    period: "2026년 11월",
-    title: "전성분 기반 스킨케어 맞춤 추천 엔진",
-    summary:
-      "기초 화장품 사용자의 루틴을 전성분 기준으로 진단해 맞는 제품을 제안합니다. 사람이 하던 성분 데이터 관리를 AI로 전환해 불필요한 업무를 70% 이상 줄였습니다.",
-    image: "/portfolio/matchum-engine.jpg",
-    url: "https://trymatchum.com/",
-    ax: true,
-    problem: [
-      "신제품이 나올 때마다 담당자가 제품 전성분을 일일이 확인해 데이터베이스에 입력했습니다.",
-      "수작업이다 보니 성분 정보가 틀리는 일이 잦았고, 그 데이터를 바탕으로 한 제품 추천도 자주 어긋났습니다.",
-    ],
-    solution: [
-      "제품 전성분을 자동으로 수집하고 검증하는 성분 데이터 파이프라인을 만들었습니다.",
-      "고객이 지금 쓰는 루틴을 전성분 기준으로 분석해, 피부 타입과 고민에 맞는 기초 화장품을 제안하는 자체 맞춤 엔진을 구축했습니다.",
-    ],
-    metrics: [{ value: "70%+", label: "불필요한 수작업 감소" }],
-    results: [
-      "수동으로 관리하던 성분 데이터 업무를 AX로 전환해 불필요한 업무를 70% 이상 줄였습니다.",
-      "외부 도구에 기대지 않는 우리만의 맞춤 추천 엔진을 갖게 되었습니다.",
-      "정확한 성분 데이터를 기반으로 추천의 신뢰도를 높였습니다.",
-    ],
-    tech: [
-      { title: "전성분 자동 수집·정리", body: "신제품의 전성분을 표기 순서 그대로 읽어 와 성분 데이터베이스에 자동으로 반영합니다." },
-      { title: "성분 지식 베이스", body: "성분마다 역할, 근거 수준, 주의 성분 여부를 정리하고, 새 성분은 공개 자료를 바탕으로 조사해 사람이 최종 검토합니다." },
-      { title: "루틴 진단", body: "고객이 쓰는 제품들의 성분을 함께 분석해 겹치거나 맞지 않는 조합을 찾아 알려줍니다." },
-      { title: "맞춤 추천 엔진", body: "피부 타입과 고민, 성분 궁합을 함께 고려해 고객에게 맞는 기초 화장품과 사용 순서를 제안합니다." },
-    ],
-    testimonial: {
-      quote:
-        "신제품이 나올 때마다 성분표를 옮겨 적는 일이 끝이 없었고, 작은 실수가 잘못된 추천으로 이어졌습니다. 이제는 성분 데이터가 자동으로 정리되고, 그 위에서 돌아가는 우리만의 추천 엔진이 생겼습니다.",
-      author: "Matchum 운영 담당자",
-    },
-  },
-  {
     slug: "matchum",
     client: "(주)제이엠비코퍼레이션",
     category: "커머스",
@@ -125,6 +86,7 @@ export const projects: Project[] = [
     summary:
       "쇼피파이의 각종 수수료를 걷어내고 자체 글로벌 이커머스로 전환했습니다. 상품 등록부터 수출 신고, 배송까지 AI 에이전트가 맡아 운영 업무가 90% 이상 줄었습니다.",
     image: "/portfolio/matchum.jpg",
+    thumb: "/portfolio/thumb/matchum.png",
     url: "https://trymatchum.com/",
     ax: true,
     problem: [
@@ -171,6 +133,7 @@ export const projects: Project[] = [
     summary:
       "수기로 관리하던 아이들의 입·퇴실을 앱 플랫폼으로 전환했습니다. 기록은 자동으로 남고, 선생님은 행정 대신 아이들에게 더 집중합니다.",
     image: "/portfolio/alion.jpg",
+    thumb: "/portfolio/thumb/alion.png",
     url: "https://alionhub.com/",
     ax: true,
     problem: [
@@ -212,6 +175,7 @@ export const projects: Project[] = [
     summary:
       "중간 유통 단계를 줄여 농가 수익을 높이는 B2B 농산물 경매 플랫폼입니다. 1년으로 예상되던 과업을 기획부터 출시까지 2개월 만에 마쳤습니다.",
     image: "/portfolio/nongbujangteo.jpg",
+    thumb: "/portfolio/thumb/nongbujangteo.png",
     url: "https://nongbujangteo.kr/",
     ax: true,
     problem: [
@@ -257,6 +221,7 @@ export const projects: Project[] = [
     summary:
       "향수 브랜드 KYDE(카이드)의 카페24 전용 스킨과 시그니처 향 추천 퀴즈를 AI로 2주 만에 만들어, 예정된 런칭 일정을 지켰습니다.",
     image: "/portfolio/kyde.jpg",
+    thumb: "/portfolio/thumb/kyde.png",
     url: "https://kyde.kr/",
     ax: true,
     problem: [
@@ -296,6 +261,7 @@ export const projects: Project[] = [
     summary:
       "전업 트레이더 고객의 매매 기법을 하네스 에이전트 방식으로 옮겨, 10여 개의 AI 에이전트가 시장 분석부터 매매까지 자동으로 운용합니다.",
     image: "/portfolio/ai-trading.jpg",
+    thumb: "/portfolio/thumb/ai-trading.png",
     imageNote: "고객 보호를 위해 실제 화면 대신 구성 개념을 담은 이미지를 사용했습니다.",
     ax: true,
     problem: [
