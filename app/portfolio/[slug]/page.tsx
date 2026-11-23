@@ -80,6 +80,7 @@ export default async function CasePage({ params }: Props) {
             <div className="pf-meta">
               {svc ? <AxName name={svc.name} /> : <span className="pf-cat">{p.category}</span>}
               {p.ax && <span className="pf-badge">AX 전환</span>}
+              {p.status && <span className="pf-badge pf-badge-status">{p.status}</span>}
             </div>
             <h1>{p.title}</h1>
             <p className="hero-sub">{p.summary}</p>

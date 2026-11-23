@@ -60,6 +60,7 @@ export default function PortfolioPage() {
                       {p.client} · {p.period}
                     </span>
                     {p.ax && <span className="pf-badge">AX 전환</span>}
+                    {p.status && <span className="pf-badge pf-badge-status">{p.status}</span>}
                   </div>
                   <h3>{p.title}</h3>
                   <p className="muted">{p.summary}</p>
