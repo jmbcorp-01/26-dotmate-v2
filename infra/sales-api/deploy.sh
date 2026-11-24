@@ -61,8 +61,18 @@ if [ -z "${DATA_GO_KR_KEY:-}" ]; then
   DATA_GO_KR_KEY=$(aws_ lambda get-function-configuration --function-name $FN --query "Environment.Variables.DATA_GO_KR_KEY" --output text 2>/dev/null || true)
   [ "$DATA_GO_KR_KEY" = "None" ] && DATA_GO_KR_KEY=""
 fi
-ENV="Variables={TABLE_NAME=$TABLE,USER_POOL_ID=$POOL_ID,USER_POOL_CLIENT_ID=$CLIENT_ID,ALLOWED_EMAILS=$ADMIN_EMAIL${DATA_GO_KR_KEY:+,DATA_GO_KR_KEY=$DATA_GO_KR_KEY}}"
-rm -f /tmp/$FN.zip && zip -q /tmp/$FN.zip index.mjs
+# Claude API 키(AI 점수 초안)도 같은 방식입니다: AI_API_KEY 로 넘기면 바꾸고, 없으면 그대로 둡니다.
+if [ -z "${AI_API_KEY:-}" ]; then
+  AI_API_KEY=$(aws_ lambda get-function-configuration --function-name $FN --query "Environment.Variables.ANTHROPIC_API_KEY" --output text 2>/dev/null || true)
+  [ "$AI_API_KEY" = "None" ] && AI_API_KEY=""
+fi
+ENV="Variables={TABLE_NAME=$TABLE,USER_POOL_ID=$POOL_ID,USER_POOL_CLIENT_ID=$CLIENT_ID,ALLOWED_EMAILS=$ADMIN_EMAIL,AI_MONTHLY_USD=${AI_MONTHLY_USD:-30}${DATA_GO_KR_KEY:+,DATA_GO_KR_KEY=$DATA_GO_KR_KEY}${AI_API_KEY:+,ANTHROPIC_API_KEY=$AI_API_KEY}}"
+# 배포 묶음: 코드 + 운영 의존성(@anthropic-ai/sdk). AWS SDK는 Lambda 런타임에 들어 있어 넣지 않습니다.
+BUILD=$(mktemp -d)
+cp index.mjs ai-score.mjs package.json package-lock.json "$BUILD"/
+(cd "$BUILD" && npm ci --omit=dev --no-audit --no-fund --silent)
+rm -f /tmp/$FN.zip && (cd "$BUILD" && zip -qr /tmp/$FN.zip .)
+rm -rf "$BUILD"
 if aws_ lambda get-function --function-name $FN >/dev/null 2>&1; then
   aws_ lambda update-function-code --function-name $FN --zip-file fileb:///tmp/$FN.zip >/dev/null
   aws_ lambda wait function-updated-v2 --function-name $FN

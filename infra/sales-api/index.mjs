@@ -21,7 +21,9 @@ const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || "")
   .split(",")
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean);
-const DATA_KEY = process.env.DATA_GO_KR_KEY || ""; // 공공데이터포털 일반 인증키(Decoding)
+const DATA_KEY = process.env.DATA_GO_KR_KEY || "";
+const AI_KEY = process.env.ANTHROPIC_API_KEY || ""; // Claude API 키 (AI 점수 초안)
+const AI_MONTHLY_USD = Number(process.env.AI_MONTHLY_USD || 30); // 월 예산 약 5만 원 // 공공데이터포털 일반 인증키(Decoding)
 const ISSUER = `https://cognito-idp.${REGION}.amazonaws.com/${POOL_ID}`;
 
 let db = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
@@ -405,6 +407,51 @@ async function lookupRoutes(method, id, body, user) {
   throw new HttpError(404, "not_found");
 }
 
+
+// ---------- AI 점수 초안 ----------
+// 사용액: pk=AIUSAGE sk=<YYYY-MM>  /  초안: pk=CO#<id> sk=AISCORE
+
+const month = () => new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 7); // 한국 시간 기준 월
+
+async function aiUsage() {
+  const r = await db.send(new GetCommand({ TableName: TABLE, Key: { pk: "AIUSAGE", sk: month() } }));
+  return { month: month(), usd: r.Item?.usd || 0, calls: r.Item?.calls || 0, cap: AI_MONTHLY_USD };
+}
+
+async function addAiUsage(usd) {
+  const u = await aiUsage();
+  await db.send(
+    new PutCommand({ TableName: TABLE, Item: { pk: "AIUSAGE", sk: u.month, usd: Math.round((u.usd + usd) * 10000) / 10000, calls: u.calls + 1, updatedAt: now() } }),
+  );
+}
+
+async function aiScoreRoute(id, user) {
+  const usage = await aiUsage();
+  if (usage.usd >= AI_MONTHLY_USD) throw new HttpError(429, "ai_budget");
+  const company = await getCompany(id);
+  const children = await queryAll({ KeyConditionExpression: "pk = :p", ExpressionAttributeValues: { ":p": `CO#${id}` }, ScanIndexForward: false });
+  const { scoreCompany, AiError } = await import("./ai-score.mjs");
+  let draft;
+  try {
+    draft = await scoreCompany({
+      apiKey: AI_KEY,
+      company,
+      activities: children.filter((c) => c.sk.startsWith("ACT#")),
+      contacts: children.filter((c) => c.sk.startsWith("CONTACT#")),
+    });
+  } catch (e) {
+    if (e instanceof AiError) {
+      if (e.cost) await addAiUsage(e.cost);
+      throw new HttpError(e.code === "ai_key_missing" ? 503 : 502, e.code);
+    }
+    throw e;
+  }
+  await addAiUsage(draft.cost);
+  const item = { pk: `CO#${id}`, sk: "AISCORE", companyId: id, ...draft, at: now(), by: user.email };
+  await db.send(new PutCommand({ TableName: TABLE, Item: item }));
+  return { aiScore: strip(item), usage: await aiUsage() };
+}
+
 // ---------- 타겟 DB (국민연금 가입 사업장 자료) ----------
 // 관리자 화면이 공공데이터포털의 월간 CSV를 읽어 산업별로 분류한 행을 500개씩 보내고, 여기서는 저장·검색·등록만 합니다.
 
@@ -621,6 +668,8 @@ async function route(method, path, body, user, query = new URLSearchParams()) {
   const seg = path.split("/").filter(Boolean);
   if (seg[0] === "prospects") return prospectRoutes(method, seg, body, query, user);
   if (seg[0] === "companies" && seg.length === 3 && seg[2] === "lookup") return lookupRoutes(method, seg[1], body, user);
+  if (seg[0] === "companies" && seg.length === 3 && seg[2] === "ai-score" && method === "POST") return aiScoreRoute(seg[1], user);
+  if (method === "GET" && path === "/ai/usage") return aiUsage();
 
   if (method === "GET" && path === "/meta") return { stages: STAGES, industries: INDUSTRIES, scoreItems: SCORE_ITEMS, activityTypes: ACTIVITY_TYPES };
   if (method === "GET" && path === "/me") return { email: user.email };
@@ -648,6 +697,10 @@ async function route(method, path, body, user, query = new URLSearchParams()) {
         company,
         contacts: children.filter((c) => c.sk.startsWith("CONTACT#")).map(strip),
         activities: children.filter((c) => c.sk.startsWith("ACT#")).map(strip),
+        aiScore: (() => {
+          const a = children.find((c) => c.sk === "AISCORE");
+          return a ? strip(a) : null;
+        })(),
         deals,
       };
     }

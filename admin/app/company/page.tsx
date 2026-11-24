@@ -12,12 +12,13 @@ import {
   SCORE_ITEMS,
   STAGES,
   type Activity,
+  type AiScore,
   type Company,
   type Contact,
   type Deal,
 } from "@/lib/types";
 
-type Detail = { company: Company; contacts: Contact[]; activities: Activity[]; deals: Deal[] };
+type Detail = { company: Company; contacts: Contact[]; activities: Activity[]; deals: Deal[]; aiScore: AiScore | null };
 
 export default function CompanyPage() {
   const [id, setId] = useState<string | null>(null);
@@ -63,6 +64,7 @@ export default function CompanyPage() {
       <div className="grid grid-2">
         <div className="grid">
           <Lookup company={company} onSaved={reload} />
+          <AiDraft company={company} draft={data.aiScore} onSaved={reload} />
           <CompanyForm key={company.updatedAt} company={company} onSaved={reload} />
         </div>
         <div className="grid">
@@ -564,6 +566,102 @@ function Lookup({ company, onSaved }: { company: Company; onSaved: () => void })
         </div>
       )}
       {msg && <p className="notice ok">{msg}</p>}
+      {error && <p className="notice">{error}</p>}
+    </section>
+  );
+}
+
+// AI 점수 초안: 6개 항목 점수와 근거를 만들고, 확인 후 "이 점수로 적용"을 누르면 기업 점수가 됩니다.
+function AiDraft({ company, draft, onSaved }: { company: Company; draft: AiScore | null; onSaved: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [usage, setUsage] = useState<{ usd: number; cap: number } | null>(null);
+  const applied = !!draft && SCORE_ITEMS.every((i) => company.score[i.key] === draft.score[i.key]);
+
+  async function make() {
+    setBusy(true);
+    setError("");
+    try {
+      const r = await api<{ usage: { usd: number; cap: number } }>(`/companies/${company.id}/ai-score`, { method: "POST" });
+      setUsage(r.usage);
+      onSaved();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function apply() {
+    if (!draft) return;
+    setBusy(true);
+    setError("");
+    try {
+      await api(`/companies/${company.id}`, { method: "PUT", body: { ...company, score: draft.score } });
+      onSaved();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const grade = (t: number) => (t >= 80 ? "A" : t >= 60 ? "B" : "C");
+
+  return (
+    <section className="card form">
+      <div className="spread">
+        <h2 style={{ margin: 0 }}>AI 점수 초안</h2>
+        <button className="btn ghost small" disabled={busy} onClick={make}>
+          {busy ? "만드는 중... (10~20초)" : draft ? "다시 만들기" : "AI 초안 만들기"}
+        </button>
+      </div>
+      {!draft && !busy && (
+        <p className="small muted">
+          기업 정보, 메모, 영업 기록을 보고 6개 항목 점수와 근거를 제안합니다. 정보가 많을수록 정확해지니 공공데이터 정보를 먼저 채우는 게 좋습니다.
+        </p>
+      )}
+      {draft && (
+        <>
+          <p>
+            <span className={`badge ${grade(draft.total)}`}>
+              {grade(draft.total)} · {draft.total}점
+            </span>{" "}
+            <span className="small">{draft.summary}</span>
+          </p>
+          <div className="grid" style={{ gap: 8 }}>
+            {SCORE_ITEMS.map((i) => (
+              <div key={i.key}>
+                <div className="spread small">
+                  <strong>{i.label}</strong>
+                  <span>
+                    {draft.score[i.key]} / {i.max}
+                    {company.score[i.key] !== undefined && company.score[i.key] !== draft.score[i.key] && (
+                      <span className="muted"> (현재 {company.score[i.key]})</span>
+                    )}
+                  </span>
+                </div>
+                <p className="small muted">{draft.reasons[i.key]}</p>
+              </div>
+            ))}
+          </div>
+          {draft.nextAction && (
+            <p className="notice ok">
+              <strong>다음 할 일</strong> {draft.nextAction}
+            </p>
+          )}
+          {draft.missingInfo.length > 0 && <div className="small muted">확인하면 더 정확해지는 정보: {draft.missingInfo.join(" · ")}</div>}
+          <div className="spread">
+            <span className="small muted">
+              {new Date(draft.at).toLocaleString("ko-KR")} 생성
+              {usage && ` · 이번 달 AI 사용 $${usage.usd.toFixed(2)} / $${usage.cap}`}
+            </span>
+            <button className="btn small" disabled={busy || applied} onClick={apply}>
+              {applied ? "적용됨" : "이 점수로 적용"}
+            </button>
+          </div>
+        </>
+      )}
       {error && <p className="notice">{error}</p>}
     </section>
   );

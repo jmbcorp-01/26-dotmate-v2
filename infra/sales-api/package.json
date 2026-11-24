@@ -2,9 +2,12 @@
   "name": "dotmate-sales-api",
   "private": true,
   "type": "module",
-  "description": "Lambda 런타임에 AWS SDK가 들어 있어 배포 zip에는 index.mjs만 넣습니다. 아래 패키지는 로컬 모의 실행용입니다.",
+  "description": "Lambda 런타임에 AWS SDK가 들어 있어 배포 zip에는 코드와 dependencies(@anthropic-ai/sdk)만 넣습니다. devDependencies는 로컬 모의 실행용입니다.",
   "devDependencies": {
     "@aws-sdk/client-dynamodb": "^3.700.0",
     "@aws-sdk/lib-dynamodb": "^3.700.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.13.0"
   }
 }

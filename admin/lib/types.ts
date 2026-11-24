@@ -91,3 +91,16 @@ export type Deal = {
 
 // 전략 문서 07장 영업 상품
 export const PRODUCTS = ["무료 AX 진단", "정밀 컨설팅", "AX PoC", "AX 플랫폼 구축", "운영·고도화"] as const;
+
+export type AiScore = {
+  companyId: string;
+  score: Record<ScoreKey, number>;
+  reasons: Record<ScoreKey, string>;
+  total: number;
+  summary: string;
+  nextAction: string;
+  missingInfo: string[];
+  model: string;
+  cost: number;
+  at: string;
+};
