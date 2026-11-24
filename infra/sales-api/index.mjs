@@ -21,6 +21,7 @@ const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || "")
   .split(",")
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean);
+const DATA_KEY = process.env.DATA_GO_KR_KEY || ""; // 공공데이터포털 일반 인증키(Decoding)
 const ISSUER = `https://cognito-idp.${REGION}.amazonaws.com/${POOL_ID}`;
 
 let db = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
@@ -111,6 +112,10 @@ function cleanCompany(b, prev = {}) {
   return {
     name,
     bizNo: str(b.bizNo, 20) ?? prev.bizNo,
+    crno: str(b.crno, 20) ?? prev.crno, // 법인등록번호
+    ceo: str(b.ceo, 50) ?? prev.ceo,
+    founded: str(b.founded, 20) ?? prev.founded,
+    address: str(b.address, 300) ?? prev.address,
     industry: oneOf(b.industry, INDUSTRIES) ?? prev.industry ?? "기타",
     region: str(b.region, 50) ?? prev.region,
     revenue: str(b.revenue, 50) ?? prev.revenue, // 예: "약 120억"
@@ -273,6 +278,133 @@ async function deleteCompany(id) {
 }
 
 
+
+// ---------- 기업 정보 조회 (금융위원회 기업기본정보·재무정보, 공공데이터포털) ----------
+
+async function dataGoKr(path, params) {
+  if (!DATA_KEY) throw new HttpError(503, "data_key_missing");
+  const qs = new URLSearchParams({ serviceKey: DATA_KEY, pageNo: "1", resultType: "json", ...params });
+  let res;
+  try {
+    res = await fetch(`https://apis.data.go.kr/1160100/service/${path}?${qs}`, { signal: AbortSignal.timeout(8000) });
+  } catch {
+    throw new HttpError(502, "data_unreachable");
+  }
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    // 키 미승인·트래픽 초과 등은 XML 오류로 옵니다.
+    console.error("data.go.kr", path, res.status, text.slice(0, 300));
+    if (/SERVICE_KEY_IS_NOT_REGISTERED|SERVICE ACCESS DENIED|NO_OPENAPI_SERVICE/.test(text)) throw new HttpError(502, "data_not_approved");
+    if (/LIMITED_NUMBER_OF_SERVICE_REQUESTS/.test(text)) throw new HttpError(502, "data_limit");
+    throw new HttpError(502, "data_error");
+  }
+  const code = data?.response?.header?.resultCode;
+  if (code && code !== "00") {
+    console.error("data.go.kr", path, code, data?.response?.header?.resultMsg);
+    throw new HttpError(502, "data_error");
+  }
+  const item = data?.response?.body?.items?.item;
+  return Array.isArray(item) ? item : item ? [item] : [];
+}
+
+const ymd = (v) => (typeof v === "string" && /^\d{8}$/.test(v) ? `${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6, 8)}` : undefined);
+const bizFmt = (v) => (typeof v === "string" && /^\d{10}$/.test(v) ? `${v.slice(0, 3)}-${v.slice(3, 5)}-${v.slice(5)}` : v || undefined);
+
+function outline(x) {
+  return {
+    crno: x.crno,
+    name: x.corpNm,
+    ceo: x.enpRprFnm || undefined,
+    bizNo: bizFmt(x.bzno),
+    address: [x.enpBsadr, x.enpDtadr].filter(Boolean).join(" ") || undefined,
+    website: x.enpHmpgUrl ? (/^https?:\/\//.test(x.enpHmpgUrl) ? x.enpHmpgUrl : `http://${x.enpHmpgUrl}`) : undefined,
+    phone: x.enpTlno || undefined,
+    kind: x.sicNm || undefined,
+    mainBiz: x.enpMainBizNm || undefined,
+    employees: Number(x.enpEmpeCnt) > 0 ? Number(x.enpEmpeCnt) : undefined,
+    founded: ymd(x.enpEstbDt),
+    listed: x.corpRegMrktDcdNm || undefined,
+    basDt: x.basDt,
+  };
+}
+
+// 회사명으로 후보를 찾습니다. 같은 법인이 기준일별로 여러 번 나오므로 법인등록번호로 묶어 최신 것만 남깁니다.
+async function searchCorp(name) {
+  const corpNm = String(name).replace(/\(주\)|주식회사|㈜|\(유\)|유한회사/g, "").trim();
+  if (!corpNm) return [];
+  const items = await dataGoKr("GetCorpBasicInfoService_V2/getCorpOutline_V2", { numOfRows: "50", corpNm });
+  const latest = new Map();
+  for (const x of items) {
+    if (!x.crno) continue;
+    const prev = latest.get(x.crno);
+    if (!prev || String(x.basDt || "") > String(prev.basDt || "")) latest.set(x.crno, x);
+  }
+  return [...latest.values()].map(outline).slice(0, 20);
+}
+
+async function corpFinance(crno) {
+  try {
+    const items = await dataGoKr("GetFinaStatInfoService_V2/getSummFinaStat_V2", { numOfRows: "20", crno });
+    const rows = items.filter((x) => x.bizYear && x.enpSaleAmt !== undefined && x.enpSaleAmt !== "");
+    if (!rows.length) return { finance: null };
+    // 최근 사업연도, 같은 해면 연결보다 별도 재무제표를 우선합니다.
+    rows.sort((a, b) => String(b.bizYear).localeCompare(String(a.bizYear)) || (String(a.fnclDcdNm).includes("연결") ? 1 : -1));
+    const x = rows[0];
+    return { finance: { year: x.bizYear, sales: Number(x.enpSaleAmt), profit: Number(x.enpBzopPft), assets: Number(x.enpTastAmt) } };
+  } catch (e) {
+    return { finance: null, financeError: e instanceof HttpError ? e.code : "data_error" };
+  }
+}
+
+const eok = (n) => {
+  if (!Number.isFinite(n)) return undefined;
+  const v = n / 1e8;
+  return `약 ${v >= 10 ? Math.round(v).toLocaleString("ko-KR") : v.toFixed(1)}억`;
+};
+
+async function lookupRoutes(method, id, body, user) {
+  const company = await getCompany(id);
+  if (method === "GET") return { query: company.name, items: await searchCorp(company.name) };
+  if (method === "POST") {
+    const crno = str(body.crno, 20);
+    if (!crno || !/^\d{13}$/.test(crno)) throw new HttpError(400, "crno_required");
+    const items = await dataGoKr("GetCorpBasicInfoService_V2/getCorpOutline_V2", { numOfRows: "10", crno });
+    if (!items.length) throw new HttpError(404, "not_found");
+    items.sort((a, b) => String(b.basDt || "").localeCompare(String(a.basDt || "")));
+    const o = outline(items[0]);
+    const { finance, financeError } = await corpFinance(crno);
+    const patch = {
+      crno,
+      ceo: o.ceo,
+      bizNo: o.bizNo,
+      address: o.address,
+      founded: o.founded,
+      website: company.website || o.website,
+      employees: o.employees ? `${o.employees}명 (금융위 ${o.basDt?.slice(0, 4) || ""})` : undefined,
+      revenue: finance && Number.isFinite(finance.sales) ? `${eok(finance.sales)} (${finance.year})` : undefined,
+    };
+    const updated = await putCompany({ ...company, ...Object.fromEntries(Object.entries(patch).filter(([, v]) => v)) }, user, company);
+    const lines = [
+      `기업 정보 자동 채우기 (금융위원회 기업기본정보 ${o.basDt || ""})`,
+      o.ceo && `대표자: ${o.ceo}`,
+      o.bizNo && `사업자번호: ${o.bizNo}`,
+      o.kind && `업종: ${o.kind}`,
+      o.mainBiz && `주요 사업: ${o.mainBiz}`,
+      o.employees && `직원 수: ${o.employees}명`,
+      o.founded && `설립일: ${o.founded}`,
+      o.listed && `시장 구분: ${o.listed}`,
+      o.phone && `대표 전화: ${o.phone}`,
+      finance && `${finance.year} 매출 ${eok(finance.sales)}, 영업이익 ${eok(finance.profit) ?? "-"}`,
+    ].filter(Boolean);
+    await addActivity(id, { type: "메모", body: lines.join("\n") }, user);
+    return { company: updated, outline: o, finance, financeError };
+  }
+  throw new HttpError(404, "not_found");
+}
+
 // ---------- 타겟 DB (국민연금 가입 사업장 자료) ----------
 // 관리자 화면이 공공데이터포털의 월간 CSV를 읽어 산업별로 분류한 행을 500개씩 보내고, 여기서는 저장·검색·등록만 합니다.
 
@@ -416,6 +548,7 @@ async function prospectRoutes(method, seg, body, query, user) {
 async function route(method, path, body, user, query = new URLSearchParams()) {
   const seg = path.split("/").filter(Boolean);
   if (seg[0] === "prospects") return prospectRoutes(method, seg, body, query, user);
+  if (seg[0] === "companies" && seg.length === 3 && seg[2] === "lookup") return lookupRoutes(method, seg[1], body, user);
 
   if (method === "GET" && path === "/meta") return { stages: STAGES, industries: INDUSTRIES, scoreItems: SCORE_ITEMS, activityTypes: ACTIVITY_TYPES };
   if (method === "GET" && path === "/me") return { email: user.email };

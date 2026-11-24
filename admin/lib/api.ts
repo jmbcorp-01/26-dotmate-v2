@@ -18,6 +18,11 @@ const MESSAGES: Record<string, string> = {
   body_required: "내용을 입력해 주세요.",
   not_found: "찾을 수 없습니다. 이미 삭제되었을 수 있습니다.",
   forbidden: "이 계정은 관리자 화면을 쓸 권한이 없습니다.",
+  data_key_missing: "공공데이터포털 인증키가 서버에 설정되지 않았습니다.",
+  data_not_approved: "공공데이터포털에서 이 API 활용신청이 아직 승인되지 않았습니다. 승인 후 1~2시간 뒤 다시 시도해 주세요.",
+  data_limit: "공공데이터포털 하루 조회 한도를 넘었습니다. 내일 다시 시도해 주세요.",
+  data_unreachable: "공공데이터포털에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+  data_error: "공공데이터포털 조회 중 오류가 났습니다. 잠시 후 다시 시도해 주세요.",
 };
 export const errorText = (e: unknown) =>
   e instanceof ApiError ? MESSAGES[e.code] || `요청을 처리하지 못했습니다 (${e.code}).` : "서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.";
