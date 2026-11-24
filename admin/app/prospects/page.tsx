@@ -6,7 +6,24 @@ import { INDUSTRIES } from "@/lib/types";
 import { INDUSTRY_RULES, REGIONS, readNpsFile, type Prospect } from "@/lib/nps";
 
 type Meta = { ym: string; counts: Record<string, number>; fileName?: string; loadedAt: string } | null;
-type Row = Prospect & { key: string; registered: boolean };
+type Row = Prospect & {
+  key: string;
+  registered: boolean;
+  sales?: number;
+  profit?: number;
+  finYear?: string;
+  finStatus?: string;
+};
+type FinResult = { key: string; status: string; sales?: number; profit?: number; finYear?: string };
+
+const eok = (n?: number) => (n === undefined || !Number.isFinite(n) ? "" : `${(n / 1e8).toLocaleString("ko-KR", { maximumFractionDigits: n >= 1e9 ? 0 : 1 })}억`);
+const FIN_STATUS: Record<string, string> = {
+  no_corp: "법인 정보 없음",
+  ambiguous: "동명 법인 여러 곳",
+  no_finance: "재무 공시 없음",
+  data_not_approved: "재무 API 승인 대기",
+  data_limit: "조회 한도 초과",
+};
 type SearchResult = { meta: Meta; total: number; items: Row[] };
 
 const SOURCE_URL = "https://www.data.go.kr/data/15083277/fileData.do";
@@ -56,6 +73,46 @@ export default function ProspectsPage() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
+
+  async function lookupFinance() {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const keys = [...picked];
+      const all: FinResult[] = [];
+      for (let i = 0; i < keys.length; i += 10) {
+        const r = await api<{ results: FinResult[] }>("/prospects/finance", {
+          method: "POST",
+          body: { items: keys.slice(i, i + 10).map((key) => ({ industry, key })) },
+        });
+        all.push(...r.results);
+        const byKey = new Map(all.map((x) => [x.key, x]));
+        setResult((prev) =>
+          prev
+            ? {
+                ...prev,
+                items: prev.items.map((it) => {
+                  const f = byKey.get(it.key);
+                  return f ? { ...it, finStatus: f.status, sales: f.sales, profit: f.profit, finYear: f.finYear } : it;
+                }),
+              }
+            : prev,
+        );
+        setNotice(`매출 조회 중... ${all.length}/${keys.length}`);
+      }
+      const ok = all.filter((x) => x.status === "ok").length;
+      const notApproved = all.some((x) => x.status === "data_not_approved");
+      setNotice(
+        `${all.length}곳 중 ${ok}곳의 매출을 찾았습니다.` +
+          (notApproved ? " 재무정보 API 승인이 아직 반영되지 않아 일부는 비어 있습니다. 1~2시간 뒤 다시 눌러 보세요." : " 비상장 소기업은 재무 공시가 없을 수 있습니다."),
+      );
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function promote() {
     setBusy(true);
@@ -136,9 +193,14 @@ export default function ProspectsPage() {
           {result ? `조건에 맞는 ${result.total.toLocaleString("ko-KR")}곳${result.total > rows.length ? ` 중 직원 수 상위 ${rows.length}곳` : ""}` : "불러오는 중..."}
           {picked.size > 0 && ` · ${picked.size}곳 선택`}
         </p>
-        <button className="btn" disabled={busy || picked.size === 0} onClick={promote}>
-          선택한 기업 타겟 등록
-        </button>
+        <div className="row">
+          <button className="btn ghost" disabled={busy || picked.size === 0} onClick={lookupFinance} title="금융위원회 재무정보에서 매출을 조회합니다">
+            선택한 기업 매출 조회
+          </button>
+          <button className="btn" disabled={busy || picked.size === 0} onClick={promote}>
+            선택한 기업 타겟 등록
+          </button>
+        </div>
       </div>
 
       <div className="table-wrap">
@@ -158,6 +220,7 @@ export default function ProspectsPage() {
               <th>회사명</th>
               <th>업종</th>
               <th>직원 수</th>
+              <th>매출</th>
               <th>지역</th>
               <th>주소</th>
               <th>국민연금 적용일</th>
@@ -179,6 +242,17 @@ export default function ProspectsPage() {
                 </td>
                 <td className="wrap">{r.kind}</td>
                 <td>{r.employees.toLocaleString("ko-KR")}명</td>
+                <td>
+                  {r.sales !== undefined && r.sales !== null ? (
+                    <span title={r.profit !== undefined ? `영업이익 ${eok(r.profit)}` : undefined}>
+                      {eok(r.sales)} <span className="muted small">{r.finYear}</span>
+                    </span>
+                  ) : r.finStatus && r.finStatus !== "ok" ? (
+                    <span className="muted small">{FIN_STATUS[r.finStatus] || "조회 실패"}</span>
+                  ) : (
+                    <span className="muted">-</span>
+                  )}
+                </td>
                 <td>{r.region || "-"}</td>
                 <td className="wrap muted small">{r.address || "-"}</td>
                 <td className="muted">{r.since || "-"}</td>
@@ -189,7 +263,7 @@ export default function ProspectsPage() {
         {result && rows.length === 0 && <p className="empty">{meta ? "조건에 맞는 기업이 없습니다." : "자료를 불러오면 여기에 후보 기업이 나옵니다."}</p>}
       </div>
       <p className="muted small" style={{ marginTop: 8 }}>
-        직원 수는 국민연금 가입자 수 기준입니다. 국민연금 자료에는 가입자 3명 이상 법인과 10명 이상 개인사업장만 들어 있습니다.
+        직원 수는 국민연금 가입자 수 기준입니다. 매출은 회사를 골라 "선택한 기업 매출 조회"를 누르면 금융위원회 재무정보에서 가져옵니다(한 번에 최대 100곳, 하루 약 5,000곳). 국민연금 자료에는 가입자 3명 이상 법인과 10명 이상 개인사업장만 들어 있습니다.
       </p>
     </>
   );

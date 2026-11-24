@@ -30,8 +30,11 @@ export const INDUSTRY_RULES: { industry: string; pattern: RegExp; minEmployees: 
   { industry: "B2B 제조·수출", pattern: /제조업/, minEmployees: 20, corpOnly: true },
 ];
 
+// 방문판매원 알선처럼 업종명에 "화장품"이 들어가도 타겟이 아닌 업종은 뺍니다.
+const EXCLUDE = /외판원|방문판매원/;
+
 export function classify(kind: string): (typeof INDUSTRY_RULES)[number] | undefined {
-  if (!kind) return undefined;
+  if (!kind || EXCLUDE.test(kind)) return undefined;
   return INDUSTRY_RULES.find((r) => r.pattern.test(kind));
 }
 

@@ -66,10 +66,10 @@ rm -f /tmp/$FN.zip && zip -q /tmp/$FN.zip index.mjs
 if aws_ lambda get-function --function-name $FN >/dev/null 2>&1; then
   aws_ lambda update-function-code --function-name $FN --zip-file fileb:///tmp/$FN.zip >/dev/null
   aws_ lambda wait function-updated-v2 --function-name $FN
-  aws_ lambda update-function-configuration --function-name $FN --environment "$ENV" >/dev/null
+  aws_ lambda update-function-configuration --function-name $FN --timeout 30 --environment "$ENV" >/dev/null
 else
   aws_ lambda create-function --function-name $FN --runtime nodejs22.x --handler index.handler \
-    --role $ROLE --zip-file fileb:///tmp/$FN.zip --timeout 15 --memory-size 256 --environment "$ENV" >/dev/null
+    --role $ROLE --zip-file fileb:///tmp/$FN.zip --timeout 30 --memory-size 256 --environment "$ENV" >/dev/null
   aws_ lambda wait function-active-v2 --function-name $FN
   aws_ lambda create-function-url-config --function-name $FN --auth-type NONE \
     --cors "{\"AllowOrigins\":$ORIGINS,\"AllowMethods\":[\"GET\",\"POST\",\"PUT\",\"DELETE\"],\"AllowHeaders\":[\"authorization\",\"content-type\"],\"MaxAge\":86400}" >/dev/null

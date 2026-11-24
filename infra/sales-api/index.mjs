@@ -496,6 +496,56 @@ async function prospectRoutes(method, seg, body, query, user) {
     return { saved: unique.length };
   }
 
+  // 고른 후보의 매출을 금융위원회 재무정보에서 조회해 후보에 저장합니다. 사업자번호 앞 6자리로 같은 회사인지 확인합니다.
+  if (method === "POST" && seg[1] === "finance") {
+    const picks = Array.isArray(body.items) ? body.items.slice(0, 10) : [];
+    const results = [];
+    let i = 0;
+    const worker = async () => {
+      while (i < picks.length) {
+        const p = picks[i++];
+        const industry = oneOf(p?.industry, INDUSTRIES);
+        const key = str(p?.key, 200);
+        if (!industry || !key) continue;
+        const got = await db.send(new GetCommand({ TableName: TABLE, Key: { pk: `PROS#${industry}`, sk: key } }));
+        const x = got.Item;
+        if (!x) continue;
+        let status = "ok";
+        let corp = null;
+        let finance = null;
+        try {
+          const hits = await searchCorp(x.name);
+          const prefix = String(x.bizNo || "").replace(/\D/g, "").slice(0, 6);
+          corp =
+            (prefix.length === 6 && hits.find((h) => String(h.bizNo || "").replace(/\D/g, "").startsWith(prefix))) ||
+            (hits.length === 1 ? hits[0] : null);
+          if (!corp) status = hits.length ? "ambiguous" : "no_corp";
+          else {
+            const f = await corpFinance(corp.crno);
+            finance = f.finance;
+            if (!finance) status = f.financeError || "no_finance";
+          }
+        } catch (e) {
+          status = e instanceof HttpError ? e.code : "data_error";
+        }
+        const item = {
+          ...x,
+          finStatus: status,
+          finCheckedAt: now(),
+          crno: corp?.crno ?? x.crno,
+          ceo: corp?.ceo ?? x.ceo,
+          sales: finance && Number.isFinite(finance.sales) ? finance.sales : x.sales,
+          profit: finance && Number.isFinite(finance.profit) ? finance.profit : x.profit,
+          finYear: finance?.year ?? x.finYear,
+        };
+        await db.send(new PutCommand({ TableName: TABLE, Item: item }));
+        results.push({ key, status, sales: item.sales, profit: item.profit, finYear: item.finYear, ceo: item.ceo });
+      }
+    };
+    await Promise.all([worker(), worker(), worker(), worker()]);
+    return { results };
+  }
+
   if (method === "POST" && seg[1] === "promote") {
     const picks = Array.isArray(body.items) ? body.items.slice(0, 100) : [];
     const meta = await prospectMeta();
@@ -528,6 +578,9 @@ async function prospectRoutes(method, seg, body, query, user) {
           industry,
           region: x.region,
           employees: x.employees ? `${x.employees}명 (국민연금 가입자)` : undefined,
+          revenue: Number.isFinite(x.sales) ? `${eok(x.sales)} (${x.finYear})` : undefined,
+          ceo: x.ceo,
+          crno: x.crno,
           source: `국민연금 가입 사업장 ${meta?.ym || x.ym}`,
           memo,
         },
