@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { api, errorText } from "@/lib/api";
 import { useData } from "@/lib/useData";
 import { INDUSTRIES, type Company } from "@/lib/types";
+import Pager from "@/components/Pager";
+
+const PAGE_SIZE = 50;
 
 export default function Companies() {
   const router = useRouter();
@@ -13,6 +16,7 @@ export default function Companies() {
   const [industry, setIndustry] = useState("");
   const [grade, setGrade] = useState("");
   const [adding, setAdding] = useState(false);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("new")) setAdding(true);
@@ -26,6 +30,9 @@ export default function Companies() {
       .filter((c) => !k || [c.name, c.region, c.platform, c.memo, c.website].some((v) => v?.toLowerCase().includes(k)))
       .sort((a, b) => b.scoreTotal - a.scoreTotal || b.updatedAt.localeCompare(a.updatedAt));
   }, [data, q, industry, grade]);
+  useEffect(() => setPage(1), [q, industry, grade]);
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const shown = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <>
@@ -45,7 +52,7 @@ export default function Companies() {
         <NewCompany
           onCreated={(c) => {
             reload();
-            router.push(`/company/?id=${c.id}`);
+            router.push(`/company/?id=${c.id}&lookup=1`);
           }}
         />
       )}
@@ -83,7 +90,7 @@ export default function Companies() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((c) => (
+            {shown.map((c) => (
               <tr key={c.id} className="link" onClick={() => router.push(`/company/?id=${c.id}`)}>
                 <td>{c.grade ? <span className={`badge ${c.grade}`}>{c.grade}</span> : <span className="badge">-</span>}</td>
                 <td>
@@ -101,6 +108,7 @@ export default function Companies() {
         </table>
         {data && rows.length === 0 && <p className="empty">조건에 맞는 기업이 없습니다.</p>}
       </div>
+      <Pager page={page} pages={pages} onPage={(p) => (setPage(p), window.scrollTo(0, 0))} />
     </>
   );
 }
@@ -153,7 +161,7 @@ function NewCompany({ onCreated }: { onCreated: (c: Company) => void }) {
       {error && <p className="notice">{error}</p>}
       <div>
         <button className="btn" disabled={busy}>
-          추가하고 상세 보기
+          추가하고 공공데이터에서 찾기
         </button>
       </div>
     </form>

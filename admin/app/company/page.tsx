@@ -62,7 +62,8 @@ export default function CompanyPage() {
 
       <div className="grid grid-2">
         <div className="grid">
-          <CompanyForm company={company} onSaved={reload} />
+          <Lookup company={company} onSaved={reload} />
+          <CompanyForm key={company.updatedAt} company={company} onSaved={reload} />
         </div>
         <div className="grid">
           <Deals company={company} deals={data.deals} onChange={reload} />
@@ -124,6 +125,14 @@ function CompanyForm({ company, onSaved }: { company: Company; onSaved: () => vo
           <input value={f.bizNo || ""} onChange={set("bizNo")} />
         </label>
         <label className="field">
+          대표자
+          <input value={f.ceo || ""} onChange={set("ceo")} />
+        </label>
+        <label className="field">
+          설립일
+          <input placeholder="예: 2015-03-01" value={f.founded || ""} onChange={set("founded")} />
+        </label>
+        <label className="field">
           지역
           <input value={f.region || ""} onChange={set("region")} />
         </label>
@@ -144,6 +153,10 @@ function CompanyForm({ company, onSaved }: { company: Company; onSaved: () => vo
           <input placeholder="예: 카페24, 자체 개발" value={f.platform || ""} onChange={set("platform")} />
         </label>
       </div>
+      <label className="field">
+        주소
+        <input value={f.address || ""} onChange={set("address")} />
+      </label>
       <label className="field">
         발굴 출처
         <input value={f.source || ""} onChange={set("source")} />
@@ -433,6 +446,125 @@ function Activities({ company, activities, onChange }: { company: Company; activ
         ))}
         {activities.length === 0 && <p className="muted">아직 기록이 없습니다.</p>}
       </div>
+    </section>
+  );
+}
+
+type CorpHit = {
+  crno: string;
+  name: string;
+  ceo?: string;
+  bizNo?: string;
+  address?: string;
+  kind?: string;
+  employees?: number;
+  founded?: string;
+  listed?: string;
+};
+
+// 금융위원회 기업기본정보에서 회사명으로 법인을 찾아 대표자·사업자번호·주소·직원 수·매출을 채웁니다.
+function Lookup({ company, onSaved }: { company: Company; onSaved: () => void }) {
+  const [hits, setHits] = useState<CorpHit[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [msg, setMsg] = useState("");
+
+  // 기업 추가 직후(?lookup=1)에는 바로 찾아봅니다.
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get("lookup") === "1" && !company.crno) {
+      p.delete("lookup");
+      window.history.replaceState(null, "", `${window.location.pathname}?${p}`);
+      find();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function find() {
+    setBusy(true);
+    setError("");
+    setMsg("");
+    try {
+      const r = await api<{ items: CorpHit[] }>(`/companies/${company.id}/lookup`);
+      setHits(r.items);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function pick(h: CorpHit) {
+    setBusy(true);
+    setError("");
+    try {
+      const r = await api<{ finance: { year: string } | null; financeError?: string }>(`/companies/${company.id}/lookup`, {
+        method: "POST",
+        body: { crno: h.crno },
+      });
+      setHits(null);
+      setMsg(
+        r.finance
+          ? `기업 정보와 ${r.finance.year}년 매출을 채웠습니다.`
+          : r.financeError === "data_not_approved"
+            ? "기업 정보를 채웠습니다. 매출은 공공데이터포털에서 \"금융위원회_기업 재무정보\" 활용신청이 승인되면 함께 채워집니다."
+            : "기업 정보를 채웠습니다. 공개된 재무정보가 없어 매출은 비워 두었습니다.",
+      );
+      onSaved();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card form">
+      <div className="spread">
+        <h2 style={{ margin: 0 }}>기업 정보 자동 채우기</h2>
+        <button className="btn ghost small" disabled={busy} onClick={find}>
+          {busy && !hits ? "찾는 중..." : company.crno ? "다시 찾기" : "공공데이터에서 찾기"}
+        </button>
+      </div>
+      <p className="small muted">금융위원회 기업기본정보에서 &quot;{company.name}&quot;을(를) 찾아 대표자, 사업자번호, 주소, 직원 수, 매출을 채웁니다. 법인만 조회됩니다.</p>
+      {hits && hits.length === 0 && <p className="notice">일치하는 법인을 찾지 못했습니다. 회사명을 정식 법인명으로 고친 뒤 다시 찾아보세요.</p>}
+      {hits && hits.length > 0 && (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>법인명</th>
+                <th>대표자</th>
+                <th>업종</th>
+                <th>직원</th>
+                <th>주소</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {hits.map((h) => (
+                <tr key={h.crno}>
+                  <td>
+                    <strong>{h.name}</strong>
+                    {h.listed && <span className="muted small"> {h.listed}</span>}
+                  </td>
+                  <td>{h.ceo || "-"}</td>
+                  <td className="wrap small">{h.kind || "-"}</td>
+                  <td>{h.employees ? `${h.employees}명` : "-"}</td>
+                  <td className="wrap small muted">{h.address || "-"}</td>
+                  <td>
+                    <button className="btn small" disabled={busy} onClick={() => pick(h)}>
+                      이 회사
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {msg && <p className="notice ok">{msg}</p>}
+      {error && <p className="notice">{error}</p>}
     </section>
   );
 }

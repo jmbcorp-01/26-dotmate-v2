@@ -40,6 +40,10 @@ export type Company = {
   id: string;
   name: string;
   bizNo?: string;
+  crno?: string;
+  ceo?: string;
+  founded?: string;
+  address?: string;
   industry: string;
   region?: string;
   revenue?: string;

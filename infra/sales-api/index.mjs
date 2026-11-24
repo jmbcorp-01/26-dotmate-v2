@@ -21,6 +21,7 @@ const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || "")
   .split(",")
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean);
+const DATA_KEY = process.env.DATA_GO_KR_KEY || ""; // 공공데이터포털 일반 인증키(Decoding)
 const ISSUER = `https://cognito-idp.${REGION}.amazonaws.com/${POOL_ID}`;
 
 let db = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
@@ -111,6 +112,10 @@ function cleanCompany(b, prev = {}) {
   return {
     name,
     bizNo: str(b.bizNo, 20) ?? prev.bizNo,
+    crno: str(b.crno, 20) ?? prev.crno, // 법인등록번호
+    ceo: str(b.ceo, 50) ?? prev.ceo,
+    founded: str(b.founded, 20) ?? prev.founded,
+    address: str(b.address, 300) ?? prev.address,
     industry: oneOf(b.industry, INDUSTRIES) ?? prev.industry ?? "기타",
     region: str(b.region, 50) ?? prev.region,
     revenue: str(b.revenue, 50) ?? prev.revenue, // 예: "약 120억"
@@ -212,6 +217,8 @@ export async function authenticate(header) {
 // 담당자: pk=CO#<companyId> sk=CONTACT#<contactId>
 // 활동:   pk=CO#<companyId> sk=ACT#<ISO 시각>#<id>
 // 딜:     pk=DEAL           sk=<dealId>   (companyId 속성)
+// 타겟 DB 후보: pk=PROS#<산업> sk=<사업자번호 앞6자리>#<사업장명>  (ym 속성: 국민연금 자료 기준월)
+// 타겟 DB 현황: pk=PROSMETA     sk=latest
 
 async function queryAll(params) {
   const items = [];
@@ -270,10 +277,350 @@ async function deleteCompany(id) {
   }
 }
 
+
+
+// ---------- 기업 정보 조회 (금융위원회 기업기본정보·재무정보, 공공데이터포털) ----------
+
+async function dataGoKr(path, params) {
+  if (!DATA_KEY) throw new HttpError(503, "data_key_missing");
+  const qs = new URLSearchParams({ serviceKey: DATA_KEY, pageNo: "1", resultType: "json", ...params });
+  let res;
+  try {
+    res = await fetch(`https://apis.data.go.kr/1160100/service/${path}?${qs}`, { signal: AbortSignal.timeout(8000) });
+  } catch {
+    throw new HttpError(502, "data_unreachable");
+  }
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    // 키 미승인·트래픽 초과 등은 XML 오류로 옵니다.
+    console.error("data.go.kr", path, res.status, text.slice(0, 300));
+    if (/SERVICE_KEY_IS_NOT_REGISTERED|SERVICE ACCESS DENIED|NO_OPENAPI_SERVICE/.test(text)) throw new HttpError(502, "data_not_approved");
+    if (/LIMITED_NUMBER_OF_SERVICE_REQUESTS/.test(text)) throw new HttpError(502, "data_limit");
+    throw new HttpError(502, "data_error");
+  }
+  const code = data?.response?.header?.resultCode;
+  if (code && code !== "00") {
+    console.error("data.go.kr", path, code, data?.response?.header?.resultMsg);
+    throw new HttpError(502, "data_error");
+  }
+  const item = data?.response?.body?.items?.item;
+  return Array.isArray(item) ? item : item ? [item] : [];
+}
+
+const ymd = (v) => (typeof v === "string" && /^\d{8}$/.test(v) ? `${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6, 8)}` : undefined);
+const bizFmt = (v) => (typeof v === "string" && /^\d{10}$/.test(v) ? `${v.slice(0, 3)}-${v.slice(3, 5)}-${v.slice(5)}` : v || undefined);
+
+function outline(x) {
+  return {
+    crno: x.crno,
+    name: x.corpNm,
+    ceo: x.enpRprFnm || undefined,
+    bizNo: bizFmt(x.bzno),
+    address: [x.enpBsadr, x.enpDtadr].filter(Boolean).join(" ") || undefined,
+    website: x.enpHmpgUrl ? (/^https?:\/\//.test(x.enpHmpgUrl) ? x.enpHmpgUrl : `http://${x.enpHmpgUrl}`) : undefined,
+    phone: x.enpTlno || undefined,
+    kind: x.sicNm || undefined,
+    mainBiz: x.enpMainBizNm || undefined,
+    employees: Number(x.enpEmpeCnt) > 0 ? Number(x.enpEmpeCnt) : undefined,
+    founded: ymd(x.enpEstbDt),
+    listed: x.corpRegMrktDcdNm || undefined,
+    basDt: x.basDt,
+  };
+}
+
+// 회사명으로 후보를 찾습니다. 같은 법인이 기준일별로 여러 번 나오므로 법인등록번호로 묶어 최신 것만 남깁니다.
+async function searchCorp(name) {
+  const corpNm = String(name).replace(/\(주\)|주식회사|㈜|\(유\)|유한회사/g, "").trim();
+  if (!corpNm) return [];
+  const items = await dataGoKr("GetCorpBasicInfoService_V2/getCorpOutline_V2", { numOfRows: "50", corpNm });
+  const latest = new Map();
+  for (const x of items) {
+    if (!x.crno) continue;
+    const prev = latest.get(x.crno);
+    if (!prev || String(x.basDt || "") > String(prev.basDt || "")) latest.set(x.crno, x);
+  }
+  return [...latest.values()].map(outline).slice(0, 20);
+}
+
+async function corpFinance(crno) {
+  try {
+    const items = await dataGoKr("GetFinaStatInfoService_V2/getSummFinaStat_V2", { numOfRows: "20", crno });
+    const rows = items.filter((x) => x.bizYear && x.enpSaleAmt !== undefined && x.enpSaleAmt !== "");
+    if (!rows.length) return { finance: null };
+    // 최근 사업연도, 같은 해면 연결보다 별도 재무제표를 우선합니다.
+    rows.sort((a, b) => String(b.bizYear).localeCompare(String(a.bizYear)) || (String(a.fnclDcdNm).includes("연결") ? 1 : -1));
+    const x = rows[0];
+    return { finance: { year: x.bizYear, sales: Number(x.enpSaleAmt), profit: Number(x.enpBzopPft), assets: Number(x.enpTastAmt) } };
+  } catch (e) {
+    return { finance: null, financeError: e instanceof HttpError ? e.code : "data_error" };
+  }
+}
+
+const eok = (n) => {
+  if (!Number.isFinite(n)) return undefined;
+  const v = n / 1e8;
+  return `약 ${v >= 10 ? Math.round(v).toLocaleString("ko-KR") : v.toFixed(1)}억`;
+};
+
+async function lookupRoutes(method, id, body, user) {
+  const company = await getCompany(id);
+  if (method === "GET") return { query: company.name, items: await searchCorp(company.name) };
+  if (method === "POST") {
+    const crno = str(body.crno, 20);
+    if (!crno || !/^\d{13}$/.test(crno)) throw new HttpError(400, "crno_required");
+    const items = await dataGoKr("GetCorpBasicInfoService_V2/getCorpOutline_V2", { numOfRows: "10", crno });
+    if (!items.length) throw new HttpError(404, "not_found");
+    items.sort((a, b) => String(b.basDt || "").localeCompare(String(a.basDt || "")));
+    const o = outline(items[0]);
+    const { finance, financeError } = await corpFinance(crno);
+    const patch = {
+      crno,
+      ceo: o.ceo,
+      bizNo: o.bizNo,
+      address: o.address,
+      founded: o.founded,
+      website: company.website || o.website,
+      employees: o.employees ? `${o.employees}명 (금융위 ${o.basDt?.slice(0, 4) || ""})` : undefined,
+      revenue: finance && Number.isFinite(finance.sales) ? `${eok(finance.sales)} (${finance.year})` : undefined,
+    };
+    const updated = await putCompany({ ...company, ...Object.fromEntries(Object.entries(patch).filter(([, v]) => v)) }, user, company);
+    const lines = [
+      `기업 정보 자동 채우기 (금융위원회 기업기본정보 ${o.basDt || ""})`,
+      o.ceo && `대표자: ${o.ceo}`,
+      o.bizNo && `사업자번호: ${o.bizNo}`,
+      o.kind && `업종: ${o.kind}`,
+      o.mainBiz && `주요 사업: ${o.mainBiz}`,
+      o.employees && `직원 수: ${o.employees}명`,
+      o.founded && `설립일: ${o.founded}`,
+      o.listed && `시장 구분: ${o.listed}`,
+      o.phone && `대표 전화: ${o.phone}`,
+      finance && `${finance.year} 매출 ${eok(finance.sales)}, 영업이익 ${eok(finance.profit) ?? "-"}`,
+    ].filter(Boolean);
+    await addActivity(id, { type: "메모", body: lines.join("\n") }, user);
+    return { company: updated, outline: o, finance, financeError };
+  }
+  throw new HttpError(404, "not_found");
+}
+
+// ---------- 타겟 DB (국민연금 가입 사업장 자료) ----------
+// 관리자 화면이 공공데이터포털의 월간 CSV를 읽어 산업별로 분류한 행을 500개씩 보내고, 여기서는 저장·검색·등록만 합니다.
+
+const normName = (s) => String(s || "").replace(/\s|\(주\)|주식회사|\(유\)|유한회사|㈜/g, "");
+
+function cleanProspect(r, ym, loadId) {
+  const industry = oneOf(r?.industry, INDUSTRIES);
+  const name = str(r?.name, 120);
+  if (!industry || !name) return null;
+  const bizNo = (str(r?.bizNo, 20) || "").replace(/[^0-9*]/g, "").slice(0, 10);
+  return {
+    pk: `PROS#${industry}`,
+    sk: `${bizNo || "-"}#${normName(name)}`.slice(0, 200),
+    industry,
+    name,
+    bizNo: bizNo || undefined,
+    kind: str(r?.kind, 60),
+    employees: num(r?.employees, 0, 1_000_000) ?? 0,
+    region: str(r?.region, 20),
+    address: str(r?.address, 200),
+    corp: r?.corp === true,
+    since: date(r?.since),
+    ym,
+    loadId,
+  };
+}
+
+async function prospectMeta() {
+  const r = await db.send(new GetCommand({ TableName: TABLE, Key: { pk: "PROSMETA", sk: "latest" } }));
+  return r.Item ? strip(r.Item) : null;
+}
+
+// 따뜻한 Lambda에서는 산업별 후보를 5분간 메모리에 둡니다. 자료를 새로 불러오면 loadedAt이 바뀌어 다시 읽습니다.
+const prospectCache = new Map(); // industry → { loadedAt, at, items }
+async function prospectsOf(industry, meta) {
+  const c = prospectCache.get(industry);
+  if (c && c.loadedAt === meta.loadedAt && Date.now() - c.at < 5 * 60_000) return c.items;
+  const all = await queryAll({ KeyConditionExpression: "pk = :p", ExpressionAttributeValues: { ":p": `PROS#${industry}` } });
+  const items = all.filter((x) => (meta.loadId ? x.loadId === meta.loadId : x.ym === meta.ym)).sort((a, b) => b.employees - a.employees);
+  prospectCache.set(industry, { loadedAt: meta.loadedAt, at: Date.now(), items });
+  return items;
+}
+
+async function prospectRoutes(method, seg, body, query, user) {
+  if (method === "GET" && seg.length === 1) {
+    const meta = await prospectMeta();
+    const industry = oneOf(query.get("industry"), INDUSTRIES);
+    if (!industry || !meta) return { meta, items: [], total: 0 };
+    const region = query.get("region") || "";
+    const min = num(query.get("min"), 0, 1_000_000) ?? 0;
+    const max = num(query.get("max"), 0, 1_000_000) ?? 1_000_000;
+    const q = normName(query.get("q") || "").toLowerCase();
+    const corpOnly = query.get("corp") === "1";
+    const all = await prospectsOf(industry, meta);
+    const hits = all.filter(
+      (x) =>
+        x.employees >= min &&
+        x.employees <= max &&
+        (!region || x.region === region) &&
+        (!corpOnly || x.corp) &&
+        (!q || normName(x.name).toLowerCase().includes(q) || String(x.kind || "").includes(q) || String(x.address || "").includes(q)),
+    );
+    const size = num(query.get("size"), 10, 200) ?? 50;
+    const pages = Math.max(1, Math.ceil(hits.length / size));
+    const page = Math.min(num(query.get("page"), 1, 100_000) ?? 1, pages);
+    const companies = await queryAll({ KeyConditionExpression: "pk = :p", ExpressionAttributeValues: { ":p": "COMPANY" } });
+    const known = new Set(companies.map((c) => normName(c.name)));
+    return {
+      meta,
+      total: hits.length,
+      page,
+      pages,
+      items: hits.slice((page - 1) * size, page * size).map((x) => ({ ...strip(x), key: x.sk, registered: known.has(normName(x.name)) })),
+    };
+  }
+
+  if (method === "POST" && seg[1] === "load") {
+    const ym = typeof body.ym === "string" && /^\d{4}-\d{2}$/.test(body.ym) ? body.ym : undefined;
+    if (!ym) throw new HttpError(400, "ym_required");
+    // 같은 달 자료를 다시 불러와도 이전 분류가 섞이지 않도록 불러오기마다 loadId를 붙입니다.
+    const loadId = str(body.loadId, 40);
+    const rows = (Array.isArray(body.rows) ? body.rows.slice(0, 500) : []).map((r) => cleanProspect(r, ym, loadId)).filter(Boolean);
+    const unique = [...new Map(rows.map((r) => [`${r.pk}|${r.sk}`, r])).values()];
+    for (let i = 0; i < unique.length; i += 25) {
+      let req = { [TABLE]: unique.slice(i, i + 25).map((Item) => ({ PutRequest: { Item } })) };
+      for (let tries = 0; req && Object.keys(req).length && tries < 5; tries++) {
+        const r = await db.send(new BatchWriteCommand({ RequestItems: req }));
+        req = r?.UnprocessedItems && Object.keys(r.UnprocessedItems).length ? r.UnprocessedItems : null;
+        if (req) await new Promise((ok) => setTimeout(ok, 200 * (tries + 1)));
+      }
+    }
+    if (body.done) {
+      const counts = {};
+      for (const k of INDUSTRIES) {
+        const n = num(body.counts?.[k], 0, 10_000_000);
+        if (n) counts[k] = n;
+      }
+      await db.send(
+        new PutCommand({
+          TableName: TABLE,
+          Item: { pk: "PROSMETA", sk: "latest", ym, loadId, counts, fileName: str(body.fileName, 200), loadedAt: now(), loadedBy: user.email },
+        }),
+      );
+    }
+    return { saved: unique.length };
+  }
+
+  // 고른 후보의 매출을 금융위원회 재무정보에서 조회해 후보에 저장합니다. 사업자번호 앞 6자리로 같은 회사인지 확인합니다.
+  if (method === "POST" && seg[1] === "finance") {
+    const picks = Array.isArray(body.items) ? body.items.slice(0, 10) : [];
+    const results = [];
+    let i = 0;
+    const worker = async () => {
+      while (i < picks.length) {
+        const p = picks[i++];
+        const industry = oneOf(p?.industry, INDUSTRIES);
+        const key = str(p?.key, 200);
+        if (!industry || !key) continue;
+        const got = await db.send(new GetCommand({ TableName: TABLE, Key: { pk: `PROS#${industry}`, sk: key } }));
+        const x = got.Item;
+        if (!x) continue;
+        let status = "ok";
+        let corp = null;
+        let finance = null;
+        try {
+          const hits = await searchCorp(x.name);
+          const prefix = String(x.bizNo || "").replace(/\D/g, "").slice(0, 6);
+          corp =
+            (prefix.length === 6 && hits.find((h) => String(h.bizNo || "").replace(/\D/g, "").startsWith(prefix))) ||
+            (hits.length === 1 ? hits[0] : null);
+          if (!corp) status = hits.length ? "ambiguous" : "no_corp";
+          else {
+            const f = await corpFinance(corp.crno);
+            finance = f.finance;
+            if (!finance) status = f.financeError || "no_finance";
+          }
+        } catch (e) {
+          status = e instanceof HttpError ? e.code : "data_error";
+        }
+        const item = {
+          ...x,
+          finStatus: status,
+          finCheckedAt: now(),
+          crno: corp?.crno ?? x.crno,
+          ceo: corp?.ceo ?? x.ceo,
+          sales: finance && Number.isFinite(finance.sales) ? finance.sales : x.sales,
+          profit: finance && Number.isFinite(finance.profit) ? finance.profit : x.profit,
+          finYear: finance?.year ?? x.finYear,
+        };
+        await db.send(new PutCommand({ TableName: TABLE, Item: item }));
+        const cached = prospectCache.get(industry)?.items;
+        const at = cached ? cached.findIndex((c) => c.sk === key) : -1;
+        if (at >= 0) cached[at] = item;
+        results.push({ key, status, sales: item.sales, profit: item.profit, finYear: item.finYear, ceo: item.ceo });
+      }
+    };
+    await Promise.all([worker(), worker(), worker(), worker()]);
+    return { results };
+  }
+
+  if (method === "POST" && seg[1] === "promote") {
+    const picks = Array.isArray(body.items) ? body.items.slice(0, 100) : [];
+    const meta = await prospectMeta();
+    const existing = await queryAll({ KeyConditionExpression: "pk = :p", ExpressionAttributeValues: { ":p": "COMPANY" } });
+    const names = new Set(existing.map((c) => normName(c.name)));
+    let created = 0;
+    const skipped = [];
+    for (const p of picks) {
+      const industry = oneOf(p?.industry, INDUSTRIES);
+      const key = str(p?.key, 200);
+      if (!industry || !key) continue;
+      const r = await db.send(new GetCommand({ TableName: TABLE, Key: { pk: `PROS#${industry}`, sk: key } }));
+      const x = r.Item;
+      if (!x) continue;
+      if (names.has(normName(x.name))) {
+        skipped.push(x.name);
+        continue;
+      }
+      const memo = [
+        x.kind && `업종: ${x.kind}`,
+        x.address && `주소: ${x.address}`,
+        x.bizNo && `사업자번호 앞자리: ${x.bizNo}`,
+        x.since && `국민연금 적용일: ${x.since}`,
+      ]
+        .filter(Boolean)
+        .join("\n");
+      const c = await putCompany(
+        {
+          name: x.name,
+          industry,
+          region: x.region,
+          employees: x.employees ? `${x.employees}명 (국민연금 가입자)` : undefined,
+          revenue: Number.isFinite(x.sales) ? `${eok(x.sales)} (${x.finYear})` : undefined,
+          ceo: x.ceo,
+          crno: x.crno,
+          source: `국민연금 가입 사업장 ${meta?.ym || x.ym}`,
+          memo,
+        },
+        user,
+      );
+      await addActivity(c.id, { type: "메모", body: `타겟 DB에서 등록 (국민연금 가입 사업장 ${x.ym} 자료)` }, user);
+      names.add(normName(x.name));
+      created++;
+    }
+    return { created, skipped };
+  }
+
+  throw new HttpError(404, "not_found");
+}
+
 // ---------- 라우팅 ----------
 
-async function route(method, path, body, user) {
+async function route(method, path, body, user, query = new URLSearchParams()) {
   const seg = path.split("/").filter(Boolean);
+  if (seg[0] === "prospects") return prospectRoutes(method, seg, body, query, user);
+  if (seg[0] === "companies" && seg.length === 3 && seg[2] === "lookup") return lookupRoutes(method, seg[1], body, user);
 
   if (method === "GET" && path === "/meta") return { stages: STAGES, industries: INDUSTRIES, scoreItems: SCORE_ITEMS, activityTypes: ACTIVITY_TYPES };
   if (method === "GET" && path === "/me") return { email: user.email };
@@ -420,14 +767,14 @@ export const handler = async (event) => {
     let body = {};
     if (event.body) {
       const raw = event.isBase64Encoded ? Buffer.from(event.body, "base64").toString("utf8") : event.body;
-      if (raw.length > 1_000_000) throw new HttpError(413, "too_large");
+      if (raw.length > 2_000_000) throw new HttpError(413, "too_large");
       try {
         body = JSON.parse(raw);
       } catch {
         throw new HttpError(400, "bad_json");
       }
     }
-    return json(200, await route(method, path, body, user));
+    return json(200, await route(method, path, body, user, new URLSearchParams(event.rawQueryString || "")));
   } catch (err) {
     if (err instanceof HttpError) return json(err.status, { ok: false, error: err.code });
     // 개인정보는 로그에 남기지 않음

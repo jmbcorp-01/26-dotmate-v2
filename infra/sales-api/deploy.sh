@@ -56,15 +56,20 @@ if ! aws_ cognito-idp admin-get-user --user-pool-id "$POOL_ID" --username "$ADMI
 fi
 
 # 3) API 함수
-ENV="Variables={TABLE_NAME=$TABLE,USER_POOL_ID=$POOL_ID,USER_POOL_CLIENT_ID=$CLIENT_ID,ALLOWED_EMAILS=$ADMIN_EMAIL}"
+# 공공데이터포털 인증키: DATA_GO_KR_KEY 로 넘기면 바꾸고, 없으면 지금 함수에 있는 값을 그대로 둡니다. 저장소에는 넣지 않습니다.
+if [ -z "${DATA_GO_KR_KEY:-}" ]; then
+  DATA_GO_KR_KEY=$(aws_ lambda get-function-configuration --function-name $FN --query "Environment.Variables.DATA_GO_KR_KEY" --output text 2>/dev/null || true)
+  [ "$DATA_GO_KR_KEY" = "None" ] && DATA_GO_KR_KEY=""
+fi
+ENV="Variables={TABLE_NAME=$TABLE,USER_POOL_ID=$POOL_ID,USER_POOL_CLIENT_ID=$CLIENT_ID,ALLOWED_EMAILS=$ADMIN_EMAIL${DATA_GO_KR_KEY:+,DATA_GO_KR_KEY=$DATA_GO_KR_KEY}}"
 rm -f /tmp/$FN.zip && zip -q /tmp/$FN.zip index.mjs
 if aws_ lambda get-function --function-name $FN >/dev/null 2>&1; then
   aws_ lambda update-function-code --function-name $FN --zip-file fileb:///tmp/$FN.zip >/dev/null
   aws_ lambda wait function-updated-v2 --function-name $FN
-  aws_ lambda update-function-configuration --function-name $FN --environment "$ENV" >/dev/null
+  aws_ lambda update-function-configuration --function-name $FN --timeout 30 --memory-size 1024 --environment "$ENV" >/dev/null
 else
   aws_ lambda create-function --function-name $FN --runtime nodejs22.x --handler index.handler \
-    --role $ROLE --zip-file fileb:///tmp/$FN.zip --timeout 15 --memory-size 256 --environment "$ENV" >/dev/null
+    --role $ROLE --zip-file fileb:///tmp/$FN.zip --timeout 30 --memory-size 1024 --environment "$ENV" >/dev/null
   aws_ lambda wait function-active-v2 --function-name $FN
   aws_ lambda create-function-url-config --function-name $FN --auth-type NONE \
     --cors "{\"AllowOrigins\":$ORIGINS,\"AllowMethods\":[\"GET\",\"POST\",\"PUT\",\"DELETE\"],\"AllowHeaders\":[\"authorization\",\"content-type\"],\"MaxAge\":86400}" >/dev/null
