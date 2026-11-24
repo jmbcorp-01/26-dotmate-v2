@@ -198,48 +198,88 @@ ol {
 }
 .mnav {
   display: none;
-  position: relative;
 }
-.mnav summary {
-  list-style: none;
-  width: 36px;
-  height: 36px;
+/* 토글 버튼: 아이콘은 18px, 누르는 영역은 44px(애플·구글 권장 최소 크기) */
+.mnav-toggle {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  margin-right: -10px;
+  width: 44px;
+  height: 44px;
   display: grid;
   place-content: center;
   gap: 6px;
   cursor: pointer;
+  color: var(--ink);
+  -webkit-tap-highlight-color: transparent;
 }
-.mnav summary::-webkit-details-marker {
-  display: none;
-}
-.mnav summary span {
+.mnav-toggle span {
   display: block;
   width: 18px;
   height: 1.5px;
-  background: var(--ink);
-  transition: transform 0.2s ease;
+  background: currentColor;
+  transition: transform 0.25s ease;
 }
-.mnav[open] summary span:first-child {
+.mnav[data-open] .mnav-toggle span:first-child {
   transform: translateY(3.75px) rotate(45deg);
 }
-.mnav[open] summary span:last-child {
+.mnav[data-open] .mnav-toggle span:last-child {
   transform: translateY(-3.75px) rotate(-45deg);
+}
+/* 메뉴 열림: 배경 스크롤 잠금. 헤더의 backdrop-filter는 fixed 자식의 기준 상자를 헤더로 바꾸므로
+   열린 동안에는 끄고 흰 배경으로 둡니다(그래야 배경막이 화면 전체를 덮습니다). */
+html[data-menu-open],
+html[data-menu-open] body {
+  overflow: hidden;
+}
+html[data-menu-open] .site-header {
+  background: var(--white);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.mnav-backdrop {
+  position: fixed;
+  inset: 0;
+  top: calc(var(--header-h) + env(safe-area-inset-top, 0px));
+  background: rgba(0, 0, 0, 0.32);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease, visibility 0s linear 0.25s;
 }
 .mnav-panel {
   position: fixed;
   left: 0;
   right: 0;
   top: calc(var(--header-h) + env(safe-area-inset-top, 0px));
+  max-height: calc(100dvh - var(--header-h) - env(safe-area-inset-top, 0px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--white);
   border-bottom: 1px solid var(--line);
-  padding: 8px max(var(--gutter), env(safe-area-inset-right, 0px)) 24px max(var(--gutter), env(safe-area-inset-left, 0px));
+  padding: 8px max(var(--gutter), env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) max(var(--gutter), env(safe-area-inset-left, 0px));
   display: grid;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-8px);
+  transition: opacity 0.2s ease, transform 0.25s ease, visibility 0s linear 0.25s;
+}
+.mnav[data-open] .mnav-backdrop,
+.mnav[data-open] .mnav-panel {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition-delay: 0s;
 }
 .mnav-panel a {
   font-size: 21px;
   font-weight: 700;
   padding-block: 14px;
   border-bottom: 1px solid var(--line);
+}
+.mnav-panel a[aria-current="page"] {
+  color: var(--gray);
 }
 @media (max-width: 860px) {
   .nav {

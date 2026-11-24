@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { services } from "@/lib/services";
+import MobileNav from "@/components/MobileNav";
 
 const links = [
   ...services.map((s) => ({ href: `/services/${s.slug}/`, label: `.AX ${s.name}` })),
@@ -23,19 +24,7 @@ export default function Header() {
         <Link href="/diagnosis/" className="btn btn-sm">
           무료 진단
         </Link>
-        <details className="mnav">
-          <summary aria-label="메뉴 열기">
-            <span />
-            <span />
-          </summary>
-          <nav className="mnav-panel" aria-label="모바일 메뉴">
-            {links.map((l) => (
-              <Link key={l.href} href={l.href}>
-                {l.label}
-              </Link>
-            ))}
-          </nav>
-        </details>
+        <MobileNav links={links} />
       </div>
     </header>
   );
