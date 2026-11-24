@@ -294,10 +294,11 @@ function Loader({ meta, onDone }: { meta: Meta; onDone: () => void }) {
     setDone("");
     setState({ ratio: 0, matched: 0, saved: 0 });
     let saved = 0;
+    const loadId = `${Date.now()}`;
     try {
       const pending: Promise<void>[] = [];
       const send = async (rows: Prospect[], ym: string) => {
-        const r = await api<{ saved: number }>("/prospects/load", { method: "POST", body: { ym, rows } });
+        const r = await api<{ saved: number }>("/prospects/load", { method: "POST", body: { ym, rows, loadId } });
         saved += r.saved;
         setState((s) => (s ? { ...s, saved } : s));
       };
@@ -312,7 +313,7 @@ function Loader({ meta, onDone }: { meta: Meta; onDone: () => void }) {
         (ratio, matched) => setState((s) => ({ ratio, matched, saved: s?.saved ?? 0 })),
       );
       await Promise.all(pending);
-      await api("/prospects/load", { method: "POST", body: { ym: res.ym, rows: [], done: true, counts: res.counts, fileName: file.name } });
+      await api("/prospects/load", { method: "POST", body: { ym: res.ym, rows: [], loadId, done: true, counts: res.counts, fileName: file.name } });
       setDone(`${res.ym} 자료 ${res.total.toLocaleString("ko-KR")}곳 중 타겟 산업 후보 ${saved.toLocaleString("ko-KR")}곳을 저장했습니다.`);
       onDone();
     } catch (e) {

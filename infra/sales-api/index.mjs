@@ -410,7 +410,7 @@ async function lookupRoutes(method, id, body, user) {
 
 const normName = (s) => String(s || "").replace(/\s|\(주\)|주식회사|\(유\)|유한회사|㈜/g, "");
 
-function cleanProspect(r, ym) {
+function cleanProspect(r, ym, loadId) {
   const industry = oneOf(r?.industry, INDUSTRIES);
   const name = str(r?.name, 120);
   if (!industry || !name) return null;
@@ -428,6 +428,7 @@ function cleanProspect(r, ym) {
     corp: r?.corp === true,
     since: date(r?.since),
     ym,
+    loadId,
   };
 }
 
@@ -442,7 +443,7 @@ async function prospectsOf(industry, meta) {
   const c = prospectCache.get(industry);
   if (c && c.loadedAt === meta.loadedAt && Date.now() - c.at < 5 * 60_000) return c.items;
   const all = await queryAll({ KeyConditionExpression: "pk = :p", ExpressionAttributeValues: { ":p": `PROS#${industry}` } });
-  const items = all.filter((x) => x.ym === meta.ym).sort((a, b) => b.employees - a.employees);
+  const items = all.filter((x) => (meta.loadId ? x.loadId === meta.loadId : x.ym === meta.ym)).sort((a, b) => b.employees - a.employees);
   prospectCache.set(industry, { loadedAt: meta.loadedAt, at: Date.now(), items });
   return items;
 }
@@ -483,7 +484,9 @@ async function prospectRoutes(method, seg, body, query, user) {
   if (method === "POST" && seg[1] === "load") {
     const ym = typeof body.ym === "string" && /^\d{4}-\d{2}$/.test(body.ym) ? body.ym : undefined;
     if (!ym) throw new HttpError(400, "ym_required");
-    const rows = (Array.isArray(body.rows) ? body.rows.slice(0, 500) : []).map((r) => cleanProspect(r, ym)).filter(Boolean);
+    // 같은 달 자료를 다시 불러와도 이전 분류가 섞이지 않도록 불러오기마다 loadId를 붙입니다.
+    const loadId = str(body.loadId, 40);
+    const rows = (Array.isArray(body.rows) ? body.rows.slice(0, 500) : []).map((r) => cleanProspect(r, ym, loadId)).filter(Boolean);
     const unique = [...new Map(rows.map((r) => [`${r.pk}|${r.sk}`, r])).values()];
     for (let i = 0; i < unique.length; i += 25) {
       let req = { [TABLE]: unique.slice(i, i + 25).map((Item) => ({ PutRequest: { Item } })) };
@@ -502,7 +505,7 @@ async function prospectRoutes(method, seg, body, query, user) {
       await db.send(
         new PutCommand({
           TableName: TABLE,
-          Item: { pk: "PROSMETA", sk: "latest", ym, counts, fileName: str(body.fileName, 200), loadedAt: now(), loadedBy: user.email },
+          Item: { pk: "PROSMETA", sk: "latest", ym, loadId, counts, fileName: str(body.fileName, 200), loadedAt: now(), loadedBy: user.email },
         }),
       );
     }
