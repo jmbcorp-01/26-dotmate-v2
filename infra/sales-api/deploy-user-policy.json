@@ -32,7 +32,7 @@
       "Sid": "AdminLoginPool",
       "Effect": "Allow",
       "Action": [
-        "cognito-idp:CreateUserPool", "cognito-idp:ListUserPools"
+        "cognito-idp:CreateUserPool", "cognito-idp:ListUserPools", "cognito-idp:TagResource"
       ],
       "Resource": "*"
     },
