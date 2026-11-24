@@ -32,12 +32,16 @@ export default function PublicProposalPage() {
   return (
     <main className="public">
       {error && (
-        <div className="doc">
-          <section className="doc-page">
-            <p className="doc-brand">
-              <i aria-hidden /> 닷메이트
-            </p>
-            <p>{error}</p>
+        <div className="deck">
+          <section className="slide">
+            <div className="slide-body">
+              <p className="slide-mark cover-mark">
+                <i aria-hidden /> 닷메이트
+              </p>
+              <p className="lede" style={{ marginTop: "4cqw" }}>
+                {error}
+              </p>
+            </div>
           </section>
         </div>
       )}

@@ -15,7 +15,15 @@ const SYSTEM = `당신은 AI 전환(AX) 컨설팅·개발 회사 닷메이트의
 - 주어진 정보에 없는 사실(매출, 시스템 현황, 고객 수 등)을 지어내지 마세요. 업종에서 일반적으로 추론한 내용은 "~일 것으로 보입니다", "~하는 경우가 많습니다"처럼 추정임이 드러나게 쓰세요.
 - 기대효과 숫자는 확정 약속이 아니라 "예상" 범위로 쓰고, 근거(가정)를 note에 밝히세요.
 - 예상 비용은 단계별로 "협의" 또는 범위로 쓰고, 정밀 견적은 진단 후 드린다고 하세요. 무료 AX 진단은 0원입니다.
-- 산업 템플릿의 문제→해법 쌍 중 이 기업에 맞는 것을 골라 기업 상황에 맞게 다듬으세요.`;
+- 산업 템플릿의 문제→해법 쌍 중 이 기업에 맞는 것을 골라 기업 상황에 맞게 다듬으세요.
+분량: 투자 IR 덱처럼 16:9 슬라이드 한 장에 블록 하나가 들어갑니다. 읽히는 양만 쓰세요.
+- 모든 문장은 한 문장, 45자 안팎. 설명을 늘어놓지 말고 핵심만 쓰세요.
+- cover.title은 25자 이내의 제안 한 줄, cover.subtitle은 한 문장.
+- situation은 2개. 첫 항목은 이 기업 상황을 요약한 한 문장입니다.
+- problems 3개, areas 3개(title은 12자 이내), beforeAfter 3개.
+- roi.items 3개. value는 "30~50%", "2배"처럼 짧은 숫자 표현, label은 무엇이 바뀌는지 15자 이내. note는 근거와 가정을 두 문장 이내로.
+- plan 3~4단계. phase는 상품 이름 그대로(무료 AX 진단, 정밀 컨설팅, AX PoC, AX 플랫폼 구축, 운영·고도화) 쓰고, cost.items는 plan과 같은 이름과 순서로 쓰세요.
+- nextStep 2개.`;
 
 const str = { type: "string" };
 const arr = (items) => ({ type: "array", items });
@@ -69,7 +77,7 @@ export async function draftProposal({ apiKey, company, template, activities = []
   try {
     res = await client.beta.messages.create({
       model: AI_MODEL,
-      max_tokens: 8000,
+      max_tokens: 6000,
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
       output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
