@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { api, errorText, won } from "@/lib/api";
 import { useData } from "@/lib/useData";
 import { createProposal } from "@/lib/proposalApi";
+import { createQuote, useQuoteSettings } from "@/lib/quoteApi";
+import { QUOTE_STATUS, eokMan, type Quote } from "@/lib/quote";
 import { STATUS_LABEL, type Proposal } from "@/lib/proposal";
 import {
   ACTIVITY_TYPES,
@@ -68,6 +70,7 @@ export default function CompanyPage() {
           <Lookup company={company} onSaved={reload} />
           <AiDraft company={company} draft={data.aiScore} onSaved={reload} />
           <Proposals company={company} />
+          <Quotes company={company} />
           <CompanyForm key={company.updatedAt} company={company} onSaved={reload} />
         </div>
         <div className="grid">
@@ -710,6 +713,51 @@ function Proposals({ company }: { company: Company }) {
           {mine.map((p) => (
             <li key={p.id}>
               <Link href={`/proposal/?id=${p.id}`}>{p.title}</Link> · {STATUS_LABEL[p.status]} · 열람 {p.views || 0}회
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && <p className="notice">{error}</p>}
+    </section>
+  );
+}
+
+// 이 기업의 견적서
+function Quotes({ company }: { company: Company }) {
+  const router = useRouter();
+  const { data } = useData<{ items: Quote[] }>("/quotes");
+  const { settings } = useQuoteSettings();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const mine = (data?.items || []).filter((q) => q.companyId === company.id && q.status !== "superseded");
+
+  async function create() {
+    setBusy(true);
+    setError("");
+    try {
+      const q = await createQuote(company, settings);
+      router.push(`/quote/?id=${q.id}`);
+    } catch (e) {
+      setError(errorText(e));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card form">
+      <div className="spread">
+        <h2 style={{ margin: 0 }}>견적서</h2>
+        <button className="btn small" disabled={busy} onClick={create}>
+          견적 만들기
+        </button>
+      </div>
+      {mine.length === 0 ? (
+        <p className="small muted">2026년 SW기술자 단가로 기준가를 계산하고, 산업에 맞는 지급 방식으로 시작합니다.</p>
+      ) : (
+        <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
+          {mine.map((q) => (
+            <li key={q.id}>
+              <Link href={`/quote/?id=${q.id}`}>{q.title}</Link> v{q.version} · {eokMan(q.totals?.supply || 0)} · {QUOTE_STATUS[q.status]}
             </li>
           ))}
         </ul>

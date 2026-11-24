@@ -69,7 +69,7 @@ fi
 ENV="Variables={TABLE_NAME=$TABLE,USER_POOL_ID=$POOL_ID,USER_POOL_CLIENT_ID=$CLIENT_ID,ALLOWED_EMAILS=$ADMIN_EMAIL,AI_MONTHLY_USD=${AI_MONTHLY_USD:-30}${DATA_GO_KR_KEY:+,DATA_GO_KR_KEY=$DATA_GO_KR_KEY}${AI_API_KEY:+,ANTHROPIC_API_KEY=$AI_API_KEY}}"
 # 배포 묶음: 코드 + 운영 의존성(@anthropic-ai/sdk). AWS SDK는 Lambda 런타임에 들어 있어 넣지 않습니다.
 BUILD=$(mktemp -d)
-cp index.mjs ai-score.mjs ai-proposal.mjs proposals.mjs package.json package-lock.json "$BUILD"/
+cp index.mjs ai-score.mjs ai-proposal.mjs proposals.mjs quotes.mjs package.json package-lock.json "$BUILD"/
 (cd "$BUILD" && npm ci --omit=dev --no-audit --no-fund --silent)
 rm -f /tmp/$FN.zip && (cd "$BUILD" && zip -qr /tmp/$FN.zip .)
 rm -rf "$BUILD"

@@ -13,6 +13,7 @@ import {
   BatchWriteCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { makeProposalRoutes } from "./proposals.mjs";
+import { makeQuoteRoutes } from "./quotes.mjs";
 
 const TABLE = process.env.TABLE_NAME || "dotmate-sales";
 const REGION = process.env.AWS_REGION || "ap-northeast-2";
@@ -223,6 +224,7 @@ export async function authenticate(header) {
 // 타겟 DB 후보: pk=PROS#<산업> sk=<사업자번호 앞6자리>#<사업장명>  (ym 속성: 국민연금 자료 기준월)
 // 타겟 DB 현황: pk=PROSMETA     sk=latest
 // 제안서: pk=PROP sk=<id>, 링크 코드: pk=PCODE sk=<code>, 열람 기록: pk=PROPVIEW#<id> (proposals.mjs)
+// 견적서: pk=QUOTE sk=<id>, 링크 코드: pk=QCODE, 열람 기록: pk=QUOTEVIEW#<id>, 설정: pk=SETTINGS sk=quote (quotes.mjs)
 
 async function queryAll(params) {
   const items = [];
@@ -493,6 +495,10 @@ const proposals = () =>
     ai: aiProposal,
   }));
 
+let quoteRoutes;
+const quotes = () =>
+  (quoteRoutes ??= makeQuoteRoutes({ db, TABLE, HttpError, GetCommand, PutCommand, DeleteCommand, queryAll, strip, now, newId, str, getCompany, addActivity }));
+
 // ---------- 타겟 DB (국민연금 가입 사업장 자료) ----------
 // 관리자 화면이 공공데이터포털의 월간 CSV를 읽어 산업별로 분류한 행을 500개씩 보내고, 여기서는 저장·검색·등록만 합니다.
 
@@ -712,6 +718,7 @@ async function route(method, path, body, user, query = new URLSearchParams()) {
   if (seg[0] === "companies" && seg.length === 3 && seg[2] === "ai-score" && method === "POST") return aiScoreRoute(seg[1], user);
   if (method === "GET" && path === "/ai/usage") return aiUsage();
   if (seg[0] === "proposals") return proposals().authed(method, seg, body, user);
+  if (seg[0] === "quotes" || (seg[0] === "settings" && seg[1] === "quote")) return quotes().authed(method, seg, body, user);
 
   if (method === "GET" && path === "/meta") return { stages: STAGES, industries: INDUSTRIES, scoreItems: SCORE_ITEMS, activityTypes: ACTIVITY_TYPES };
   if (method === "GET" && path === "/me") return { email: user.email };
@@ -857,14 +864,28 @@ export const handler = async (event) => {
   const method = event.requestContext?.http?.method || "GET";
   const path = (event.rawPath || "/").replace(/\/+$/, "") || "/";
   if (method === "OPTIONS") return { statusCode: 204 };
-  // 고객이 여는 제안서 링크만 인증 없이 받습니다.
-  const pub = /^\/public\/p\/([^/]+)$/.exec(path);
+  // 고객이 여는 제안서·견적서 링크만 인증 없이 받습니다.
+  const pub = /^\/public\/(p|q)\/([^/]+)(?:\/(approve|request))?$/.exec(path);
   if (pub) {
-    if (method !== "GET") return json(405, { ok: false, error: "method_not_allowed" });
     try {
       const ua = event.headers?.["user-agent"] || "";
       const q = new URLSearchParams(event.rawQueryString || "");
-      return json(200, await proposals().publicView(pub[1], { device: /Mobi|Android|iPhone/i.test(ua) ? "모바일" : "PC", preview: q.get("preview") === "1" }));
+      const meta = { device: /Mobi|Android|iPhone/i.test(ua) ? "모바일" : "PC", preview: q.get("preview") === "1" };
+      if (pub[1] === "p") {
+        if (method !== "GET" || pub[3]) return json(405, { ok: false, error: "method_not_allowed" });
+        return json(200, await proposals().publicView(pub[2], meta));
+      }
+      let body = {};
+      if (event.body) {
+        const raw = event.isBase64Encoded ? Buffer.from(event.body, "base64").toString("utf8") : event.body;
+        if (raw.length > 10_000) throw new HttpError(413, "too_large");
+        try {
+          body = JSON.parse(raw);
+        } catch {
+          throw new HttpError(400, "bad_json");
+        }
+      }
+      return json(200, await quotes().publicRoute(method, pub[2], pub[3], body, meta));
     } catch (err) {
       if (err instanceof HttpError) return json(err.status, { ok: false, error: err.code });
       console.error("error", err?.name, err?.message);

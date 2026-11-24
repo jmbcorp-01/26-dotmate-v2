@@ -40,8 +40,10 @@ const NAV = [
   { href: "/prospects/", label: "타겟 DB" },
   { href: "/companies/", label: "타겟 기업" },
   { href: "/proposals/", label: "제안서" },
+  { href: "/quotes/", label: "견적서" },
   { href: "/inquiry/", label: "문의 등록" },
   { href: "/import/", label: "일괄 등록" },
+  { href: "/settings/", label: "견적 설정" },
 ];
 
 export default function AuthGate({ children }: { children: React.ReactNode }) {
@@ -56,11 +58,11 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   }, []);
 
   // 고객용 문서 링크는 로그인 없이 보여줍니다.
-  if (path === "/p" || path?.startsWith("/p/")) return <>{children}</>;
+  if (path === "/p" || path?.startsWith("/p/") || path === "/q" || path?.startsWith("/q/")) return <>{children}</>;
   if (session === undefined) return null;
   if (!session) return <Login onDone={setSession} />;
 
-  const current = (href: string) => (href === "/" ? path === "/" : path.startsWith(href) || (href === "/companies/" && path.startsWith("/company")) || (href === "/proposals/" && path.startsWith("/proposal")));
+  const current = (href: string) => (href === "/" ? path === "/" : path.startsWith(href) || (href === "/companies/" && path.startsWith("/company")) || (href === "/proposals/" && path.startsWith("/proposal")) || (href === "/quotes/" && path.startsWith("/quote")));
 
   return (
     <div className="app">
