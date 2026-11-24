@@ -17,6 +17,23 @@ import {
   type Step,
 } from "@/lib/auth";
 
+function QrCode({ text }: { text: string }) {
+  const [svg, setSvg] = useState("");
+  useEffect(() => {
+    let live = true;
+    import("qrcode")
+      .then((q) => q.toString(text, { type: "svg", margin: 1, errorCorrectionLevel: "M" }))
+      .then((out) => live && setSvg(out))
+      .catch(() => live && setSvg(""));
+    return () => {
+      live = false;
+    };
+  }, [text]);
+  if (!svg) return null;
+  // qrcode 라이브러리가 만든 SVG 문자열이라 외부 입력이 섞이지 않습니다.
+  return <div className="qr" role="img" aria-label="인증 앱 등록용 QR 코드" dangerouslySetInnerHTML={{ __html: svg }} />;
+}
+
 const NAV = [
   { href: "/", label: "대시보드" },
   { href: "/pipeline/", label: "영업 파이프라인" },
@@ -135,9 +152,11 @@ function Login({ onDone }: { onDone: (s: Session) => void }) {
         {step?.kind === "mfaSetup" && (
           <>
             <p>
-              2단계 인증을 등록합니다. 휴대폰의 Google Authenticator 같은 인증 앱에서 &quot;설정 키 입력&quot;을 고르고 아래 키를 넣은 뒤, 앱에 뜨는 6자리
+              2단계 인증을 등록합니다. 휴대폰의 Google Authenticator 같은 인증 앱에서 + 버튼을 누르고 아래 QR 코드를 스캔한 뒤, 앱에 뜨는 6자리
               숫자를 입력해 주세요.
             </p>
+            <QrCode text={otpauthUri(step.email, step.secret)} />
+            <p className="small muted">스캔이 안 되면 앱에서 &quot;설정 키 입력&quot;을 고르고 아래 키를 넣으세요.</p>
             <div className="secret">{step.secret}</div>
             <a className="small muted" href={otpauthUri(step.email, step.secret)}>
               휴대폰에서 보고 있다면 여기를 눌러 인증 앱에 바로 추가
