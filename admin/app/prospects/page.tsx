@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, errorText } from "@/lib/api";
 import { INDUSTRIES } from "@/lib/types";
+import Pager from "@/components/Pager";
 import { INDUSTRY_RULES, REGIONS, readNpsFile, type Prospect } from "@/lib/nps";
 
 type Meta = { ym: string; counts: Record<string, number>; fileName?: string; loadedAt: string } | null;
@@ -24,7 +25,7 @@ const FIN_STATUS: Record<string, string> = {
   data_not_approved: "재무 API 승인 대기",
   data_limit: "조회 한도 초과",
 };
-type SearchResult = { meta: Meta; total: number; items: Row[] };
+type SearchResult = { meta: Meta; total: number; page?: number; pages?: number; items: Row[] };
 
 const SOURCE_URL = "https://www.data.go.kr/data/15083277/fileData.do";
 
@@ -42,8 +43,9 @@ export default function ProspectsPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [showLoad, setShowLoad] = useState(false);
+  const [page, setPage] = useState(1);
 
-  const query = useMemo(() => {
+  const filters = useMemo(() => {
     const p = new URLSearchParams({ industry });
     if (region) p.set("region", region);
     if (min) p.set("min", min);
@@ -52,6 +54,12 @@ export default function ProspectsPage() {
     if (corp) p.set("corp", "1");
     return p.toString();
   }, [industry, region, min, max, q, corp]);
+  // 조건이 바뀌면 1쪽부터, 고른 기업도 비웁니다.
+  useEffect(() => {
+    setPage(1);
+    setPicked(new Set());
+  }, [filters]);
+  const query = `${filters}&page=${page}&size=50`;
 
   async function search() {
     setBusy(true);
@@ -59,7 +67,6 @@ export default function ProspectsPage() {
     try {
       const r = await api<SearchResult>(`/prospects?${query}`);
       setResult(r);
-      setPicked(new Set());
       if (!r.meta) setShowLoad(true);
     } catch (e) {
       setError(errorText(e));
@@ -69,7 +76,7 @@ export default function ProspectsPage() {
   }
 
   useEffect(() => {
-    const t = setTimeout(search, q ? 350 : 0);
+    const t = setTimeout(search, q || min || max ? 350 : 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
@@ -124,6 +131,7 @@ export default function ProspectsPage() {
       setNotice(
         `${r.created}곳을 타겟 기업에 등록했습니다.` + (r.skipped.length ? ` 이미 있는 ${r.skipped.length}곳은 건너뛰었습니다.` : "") + " 타겟 기업 화면에서 점수를 매겨 주세요.",
       );
+      setPicked(new Set());
       await search();
     } catch (e) {
       setError(errorText(e));
@@ -134,8 +142,8 @@ export default function ProspectsPage() {
 
   const rows = result?.items || [];
   const selectable = rows.filter((r) => !r.registered);
-  // 한 번에 100곳까지 등록하므로 "모두 선택"은 위에서부터 100곳을 고릅니다.
-  const allPicked = selectable.length > 0 && picked.size >= Math.min(100, selectable.length);
+  // "모두 선택"은 이 쪽의 기업을 고릅니다. 다른 쪽에서 고른 것은 그대로 둡니다(최대 100곳).
+  const allPicked = selectable.length > 0 && selectable.every((r) => picked.has(r.key));
   const toggle = (key: string) => {
     const next = new Set(picked);
     if (next.has(key)) next.delete(key);
@@ -190,7 +198,8 @@ export default function ProspectsPage() {
 
       <div className="spread" style={{ marginBottom: 8 }}>
         <p className="muted small">
-          {result ? `조건에 맞는 ${result.total.toLocaleString("ko-KR")}곳${result.total > rows.length ? ` 중 직원 수 상위 ${rows.length}곳` : ""}` : "불러오는 중..."}
+          {result ? `조건에 맞는 ${result.total.toLocaleString("ko-KR")}곳 · 직원 수 많은 순` : "불러오는 중..."}
+          {busy && " · 불러오는 중..."}
           {picked.size > 0 && ` · ${picked.size}곳 선택`}
         </p>
         <div className="row">
@@ -210,11 +219,16 @@ export default function ProspectsPage() {
               <th>
                 <input
                   type="checkbox"
-                  aria-label="모두 선택 (최대 100곳)"
-                  title="위에서부터 최대 100곳 선택"
+                  aria-label="이 쪽 모두 선택"
+                  title="이 쪽 모두 선택 (전체 최대 100곳)"
                   checked={allPicked}
                   disabled={!selectable.length}
-                  onChange={() => setPicked(allPicked ? new Set() : new Set(selectable.slice(0, 100).map((r) => r.key)))}
+                  onChange={() => {
+                    const next = new Set(picked);
+                    if (allPicked) selectable.forEach((r) => next.delete(r.key));
+                    else for (const r of selectable) if (next.size < 100) next.add(r.key);
+                    setPicked(next);
+                  }}
                 />
               </th>
               <th>회사명</th>
@@ -262,6 +276,7 @@ export default function ProspectsPage() {
         </table>
         {result && rows.length === 0 && <p className="empty">{meta ? "조건에 맞는 기업이 없습니다." : "자료를 불러오면 여기에 후보 기업이 나옵니다."}</p>}
       </div>
+      <Pager page={result?.page || page} pages={result?.pages || 1} onPage={(p) => (setPage(p), window.scrollTo(0, 0))} />
       <p className="muted small" style={{ marginTop: 8 }}>
         직원 수는 국민연금 가입자 수 기준입니다. 매출은 회사를 골라 "선택한 기업 매출 조회"를 누르면 금융위원회 재무정보에서 가져옵니다(한 번에 최대 100곳, 하루 약 5,000곳). 국민연금 자료에는 가입자 3명 이상 법인과 10명 이상 개인사업장만 들어 있습니다.
       </p>

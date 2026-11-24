@@ -436,6 +436,17 @@ async function prospectMeta() {
   return r.Item ? strip(r.Item) : null;
 }
 
+// 따뜻한 Lambda에서는 산업별 후보를 5분간 메모리에 둡니다. 자료를 새로 불러오면 loadedAt이 바뀌어 다시 읽습니다.
+const prospectCache = new Map(); // industry → { loadedAt, at, items }
+async function prospectsOf(industry, meta) {
+  const c = prospectCache.get(industry);
+  if (c && c.loadedAt === meta.loadedAt && Date.now() - c.at < 5 * 60_000) return c.items;
+  const all = await queryAll({ KeyConditionExpression: "pk = :p", ExpressionAttributeValues: { ":p": `PROS#${industry}` } });
+  const items = all.filter((x) => x.ym === meta.ym).sort((a, b) => b.employees - a.employees);
+  prospectCache.set(industry, { loadedAt: meta.loadedAt, at: Date.now(), items });
+  return items;
+}
+
 async function prospectRoutes(method, seg, body, query, user) {
   if (method === "GET" && seg.length === 1) {
     const meta = await prospectMeta();
@@ -446,24 +457,26 @@ async function prospectRoutes(method, seg, body, query, user) {
     const max = num(query.get("max"), 0, 1_000_000) ?? 1_000_000;
     const q = normName(query.get("q") || "").toLowerCase();
     const corpOnly = query.get("corp") === "1";
-    const all = await queryAll({ KeyConditionExpression: "pk = :p", ExpressionAttributeValues: { ":p": `PROS#${industry}` } });
-    const hits = all
-      .filter(
-        (x) =>
-          x.ym === meta.ym &&
-          x.employees >= min &&
-          x.employees <= max &&
-          (!region || x.region === region) &&
-          (!corpOnly || x.corp) &&
-          (!q || normName(x.name).toLowerCase().includes(q) || String(x.kind || "").includes(q) || String(x.address || "").includes(q)),
-      )
-      .sort((a, b) => b.employees - a.employees);
+    const all = await prospectsOf(industry, meta);
+    const hits = all.filter(
+      (x) =>
+        x.employees >= min &&
+        x.employees <= max &&
+        (!region || x.region === region) &&
+        (!corpOnly || x.corp) &&
+        (!q || normName(x.name).toLowerCase().includes(q) || String(x.kind || "").includes(q) || String(x.address || "").includes(q)),
+    );
+    const size = num(query.get("size"), 10, 200) ?? 50;
+    const pages = Math.max(1, Math.ceil(hits.length / size));
+    const page = Math.min(num(query.get("page"), 1, 100_000) ?? 1, pages);
     const companies = await queryAll({ KeyConditionExpression: "pk = :p", ExpressionAttributeValues: { ":p": "COMPANY" } });
     const known = new Set(companies.map((c) => normName(c.name)));
     return {
       meta,
       total: hits.length,
-      items: hits.slice(0, 300).map((x) => ({ ...strip(x), key: x.sk, registered: known.has(normName(x.name)) })),
+      page,
+      pages,
+      items: hits.slice((page - 1) * size, page * size).map((x) => ({ ...strip(x), key: x.sk, registered: known.has(normName(x.name)) })),
     };
   }
 
@@ -539,6 +552,9 @@ async function prospectRoutes(method, seg, body, query, user) {
           finYear: finance?.year ?? x.finYear,
         };
         await db.send(new PutCommand({ TableName: TABLE, Item: item }));
+        const cached = prospectCache.get(industry)?.items;
+        const at = cached ? cached.findIndex((c) => c.sk === key) : -1;
+        if (at >= 0) cached[at] = item;
         results.push({ key, status, sales: item.sales, profit: item.profit, finYear: item.finYear, ceo: item.ceo });
       }
     };

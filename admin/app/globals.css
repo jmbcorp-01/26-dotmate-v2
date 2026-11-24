@@ -333,6 +333,15 @@ textarea:focus {
   gap: 8px;
 }
 
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 12px;
+}
+
 /* 상태 표시 */
 .badge {
   display: inline-block;
