@@ -15,7 +15,7 @@ const fakeDb = {
     if (name === "PutCommand") return store.set(k(i.Item), structuredClone(i.Item)), {};
     if (name === "DeleteCommand") return store.delete(k(i.Key)), {};
     if (name === "BatchWriteCommand") {
-      for (const reqs of Object.values(i.RequestItems)) for (const r of reqs) store.delete(k(r.DeleteRequest.Key));
+      for (const reqs of Object.values(i.RequestItems)) for (const r of reqs) r.PutRequest ? store.set(k(r.PutRequest.Item), structuredClone(r.PutRequest.Item)) : store.delete(k(r.DeleteRequest.Key));
       return {};
     }
     if (name === "QueryCommand") {
@@ -40,7 +40,7 @@ http
     let body = "";
     for await (const c of req) body += c;
     const url = new URL(req.url, "http://localhost");
-    const r = await handler({ requestContext: { http: { method: req.method } }, rawPath: url.pathname, headers: req.headers, body: body || undefined });
+    const r = await handler({ requestContext: { http: { method: req.method } }, rawPath: url.pathname, rawQueryString: url.search.slice(1), headers: req.headers, body: body || undefined });
     res.writeHead(r.statusCode, { ...cors, ...(r.headers || {}) }).end(r.body);
   })
   .listen(3002, () => console.log("mock API http://localhost:3002"));

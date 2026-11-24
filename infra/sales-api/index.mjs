@@ -212,6 +212,8 @@ export async function authenticate(header) {
 // 담당자: pk=CO#<companyId> sk=CONTACT#<contactId>
 // 활동:   pk=CO#<companyId> sk=ACT#<ISO 시각>#<id>
 // 딜:     pk=DEAL           sk=<dealId>   (companyId 속성)
+// 타겟 DB 후보: pk=PROS#<산업> sk=<사업자번호 앞6자리>#<사업장명>  (ym 속성: 국민연금 자료 기준월)
+// 타겟 DB 현황: pk=PROSMETA     sk=latest
 
 async function queryAll(params) {
   const items = [];
@@ -270,10 +272,150 @@ async function deleteCompany(id) {
   }
 }
 
+
+// ---------- 타겟 DB (국민연금 가입 사업장 자료) ----------
+// 관리자 화면이 공공데이터포털의 월간 CSV를 읽어 산업별로 분류한 행을 500개씩 보내고, 여기서는 저장·검색·등록만 합니다.
+
+const normName = (s) => String(s || "").replace(/\s|\(주\)|주식회사|\(유\)|유한회사|㈜/g, "");
+
+function cleanProspect(r, ym) {
+  const industry = oneOf(r?.industry, INDUSTRIES);
+  const name = str(r?.name, 120);
+  if (!industry || !name) return null;
+  const bizNo = (str(r?.bizNo, 20) || "").replace(/[^0-9*]/g, "").slice(0, 10);
+  return {
+    pk: `PROS#${industry}`,
+    sk: `${bizNo || "-"}#${normName(name)}`.slice(0, 200),
+    industry,
+    name,
+    bizNo: bizNo || undefined,
+    kind: str(r?.kind, 60),
+    employees: num(r?.employees, 0, 1_000_000) ?? 0,
+    region: str(r?.region, 20),
+    address: str(r?.address, 200),
+    corp: r?.corp === true,
+    since: date(r?.since),
+    ym,
+  };
+}
+
+async function prospectMeta() {
+  const r = await db.send(new GetCommand({ TableName: TABLE, Key: { pk: "PROSMETA", sk: "latest" } }));
+  return r.Item ? strip(r.Item) : null;
+}
+
+async function prospectRoutes(method, seg, body, query, user) {
+  if (method === "GET" && seg.length === 1) {
+    const meta = await prospectMeta();
+    const industry = oneOf(query.get("industry"), INDUSTRIES);
+    if (!industry || !meta) return { meta, items: [], total: 0 };
+    const region = query.get("region") || "";
+    const min = num(query.get("min"), 0, 1_000_000) ?? 0;
+    const max = num(query.get("max"), 0, 1_000_000) ?? 1_000_000;
+    const q = normName(query.get("q") || "").toLowerCase();
+    const corpOnly = query.get("corp") === "1";
+    const all = await queryAll({ KeyConditionExpression: "pk = :p", ExpressionAttributeValues: { ":p": `PROS#${industry}` } });
+    const hits = all
+      .filter(
+        (x) =>
+          x.ym === meta.ym &&
+          x.employees >= min &&
+          x.employees <= max &&
+          (!region || x.region === region) &&
+          (!corpOnly || x.corp) &&
+          (!q || normName(x.name).toLowerCase().includes(q) || String(x.kind || "").includes(q) || String(x.address || "").includes(q)),
+      )
+      .sort((a, b) => b.employees - a.employees);
+    const companies = await queryAll({ KeyConditionExpression: "pk = :p", ExpressionAttributeValues: { ":p": "COMPANY" } });
+    const known = new Set(companies.map((c) => normName(c.name)));
+    return {
+      meta,
+      total: hits.length,
+      items: hits.slice(0, 300).map((x) => ({ ...strip(x), key: x.sk, registered: known.has(normName(x.name)) })),
+    };
+  }
+
+  if (method === "POST" && seg[1] === "load") {
+    const ym = typeof body.ym === "string" && /^\d{4}-\d{2}$/.test(body.ym) ? body.ym : undefined;
+    if (!ym) throw new HttpError(400, "ym_required");
+    const rows = (Array.isArray(body.rows) ? body.rows.slice(0, 500) : []).map((r) => cleanProspect(r, ym)).filter(Boolean);
+    const unique = [...new Map(rows.map((r) => [`${r.pk}|${r.sk}`, r])).values()];
+    for (let i = 0; i < unique.length; i += 25) {
+      let req = { [TABLE]: unique.slice(i, i + 25).map((Item) => ({ PutRequest: { Item } })) };
+      for (let tries = 0; req && Object.keys(req).length && tries < 5; tries++) {
+        const r = await db.send(new BatchWriteCommand({ RequestItems: req }));
+        req = r?.UnprocessedItems && Object.keys(r.UnprocessedItems).length ? r.UnprocessedItems : null;
+        if (req) await new Promise((ok) => setTimeout(ok, 200 * (tries + 1)));
+      }
+    }
+    if (body.done) {
+      const counts = {};
+      for (const k of INDUSTRIES) {
+        const n = num(body.counts?.[k], 0, 10_000_000);
+        if (n) counts[k] = n;
+      }
+      await db.send(
+        new PutCommand({
+          TableName: TABLE,
+          Item: { pk: "PROSMETA", sk: "latest", ym, counts, fileName: str(body.fileName, 200), loadedAt: now(), loadedBy: user.email },
+        }),
+      );
+    }
+    return { saved: unique.length };
+  }
+
+  if (method === "POST" && seg[1] === "promote") {
+    const picks = Array.isArray(body.items) ? body.items.slice(0, 100) : [];
+    const meta = await prospectMeta();
+    const existing = await queryAll({ KeyConditionExpression: "pk = :p", ExpressionAttributeValues: { ":p": "COMPANY" } });
+    const names = new Set(existing.map((c) => normName(c.name)));
+    let created = 0;
+    const skipped = [];
+    for (const p of picks) {
+      const industry = oneOf(p?.industry, INDUSTRIES);
+      const key = str(p?.key, 200);
+      if (!industry || !key) continue;
+      const r = await db.send(new GetCommand({ TableName: TABLE, Key: { pk: `PROS#${industry}`, sk: key } }));
+      const x = r.Item;
+      if (!x) continue;
+      if (names.has(normName(x.name))) {
+        skipped.push(x.name);
+        continue;
+      }
+      const memo = [
+        x.kind && `업종: ${x.kind}`,
+        x.address && `주소: ${x.address}`,
+        x.bizNo && `사업자번호 앞자리: ${x.bizNo}`,
+        x.since && `국민연금 적용일: ${x.since}`,
+      ]
+        .filter(Boolean)
+        .join("\n");
+      const c = await putCompany(
+        {
+          name: x.name,
+          industry,
+          region: x.region,
+          employees: x.employees ? `${x.employees}명 (국민연금 가입자)` : undefined,
+          source: `국민연금 가입 사업장 ${meta?.ym || x.ym}`,
+          memo,
+        },
+        user,
+      );
+      await addActivity(c.id, { type: "메모", body: `타겟 DB에서 등록 (국민연금 가입 사업장 ${x.ym} 자료)` }, user);
+      names.add(normName(x.name));
+      created++;
+    }
+    return { created, skipped };
+  }
+
+  throw new HttpError(404, "not_found");
+}
+
 // ---------- 라우팅 ----------
 
-async function route(method, path, body, user) {
+async function route(method, path, body, user, query = new URLSearchParams()) {
   const seg = path.split("/").filter(Boolean);
+  if (seg[0] === "prospects") return prospectRoutes(method, seg, body, query, user);
 
   if (method === "GET" && path === "/meta") return { stages: STAGES, industries: INDUSTRIES, scoreItems: SCORE_ITEMS, activityTypes: ACTIVITY_TYPES };
   if (method === "GET" && path === "/me") return { email: user.email };
@@ -420,14 +562,14 @@ export const handler = async (event) => {
     let body = {};
     if (event.body) {
       const raw = event.isBase64Encoded ? Buffer.from(event.body, "base64").toString("utf8") : event.body;
-      if (raw.length > 1_000_000) throw new HttpError(413, "too_large");
+      if (raw.length > 2_000_000) throw new HttpError(413, "too_large");
       try {
         body = JSON.parse(raw);
       } catch {
         throw new HttpError(400, "bad_json");
       }
     }
-    return json(200, await route(method, path, body, user));
+    return json(200, await route(method, path, body, user, new URLSearchParams(event.rawQueryString || "")));
   } catch (err) {
     if (err instanceof HttpError) return json(err.status, { ok: false, error: err.code });
     // 개인정보는 로그에 남기지 않음

@@ -37,6 +37,7 @@ function QrCode({ text }: { text: string }) {
 const NAV = [
   { href: "/", label: "대시보드" },
   { href: "/pipeline/", label: "영업 파이프라인" },
+  { href: "/prospects/", label: "타겟 DB" },
   { href: "/companies/", label: "타겟 기업" },
   { href: "/inquiry/", label: "문의 등록" },
   { href: "/import/", label: "일괄 등록" },
