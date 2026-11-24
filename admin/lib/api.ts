@@ -30,7 +30,10 @@ const MESSAGES: Record<string, string> = {
   ai_rate_limited: "AI 요청이 몰렸습니다. 잠시 후 다시 시도해 주세요.",
   ai_unreachable: "Claude API에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.",
   ai_refused: "AI가 이 요청을 처리하지 않았습니다. 기업 정보나 메모를 확인해 주세요.",
-  ai_error: "AI 점수를 만들지 못했습니다. 잠시 후 다시 시도해 주세요.",
+  ai_error: "AI 초안을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.",
+  proposal_unverified: "확인하지 않은 AI 초안 블록이 있습니다. 모든 블록을 확인한 뒤 발송해 주세요.",
+  proposal_closed: "닫힌 문서입니다. 다시 열고 고쳐 주세요.",
+  expired: "열람 기간이 끝난 링크입니다.",
 };
 export const errorText = (e: unknown) =>
   e instanceof ApiError ? MESSAGES[e.code] || `요청을 처리하지 못했습니다 (${e.code}).` : "서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.";
@@ -63,3 +66,12 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
 
 export const won = (n?: number) => (n ? n.toLocaleString("ko-KR") + "원" : "-");
 export const manwon = (n?: number) => (n ? Math.round(n / 10000).toLocaleString("ko-KR") + "만" : "0");
+
+// 고객용 공개 링크 (로그인 없음)
+export async function publicApi<T>(path: string): Promise<T> {
+  if (!API) throw new ApiError(0, "api_url_missing");
+  const res = await fetch(API + path);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, data.error || "error");
+  return data as T;
+}

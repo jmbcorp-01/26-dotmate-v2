@@ -69,17 +69,17 @@ fi
 ENV="Variables={TABLE_NAME=$TABLE,USER_POOL_ID=$POOL_ID,USER_POOL_CLIENT_ID=$CLIENT_ID,ALLOWED_EMAILS=$ADMIN_EMAIL,AI_MONTHLY_USD=${AI_MONTHLY_USD:-30}${DATA_GO_KR_KEY:+,DATA_GO_KR_KEY=$DATA_GO_KR_KEY}${AI_API_KEY:+,ANTHROPIC_API_KEY=$AI_API_KEY}}"
 # 배포 묶음: 코드 + 운영 의존성(@anthropic-ai/sdk). AWS SDK는 Lambda 런타임에 들어 있어 넣지 않습니다.
 BUILD=$(mktemp -d)
-cp index.mjs ai-score.mjs package.json package-lock.json "$BUILD"/
+cp index.mjs ai-score.mjs ai-proposal.mjs proposals.mjs package.json package-lock.json "$BUILD"/
 (cd "$BUILD" && npm ci --omit=dev --no-audit --no-fund --silent)
 rm -f /tmp/$FN.zip && (cd "$BUILD" && zip -qr /tmp/$FN.zip .)
 rm -rf "$BUILD"
 if aws_ lambda get-function --function-name $FN >/dev/null 2>&1; then
   aws_ lambda update-function-code --function-name $FN --zip-file fileb:///tmp/$FN.zip >/dev/null
   aws_ lambda wait function-updated-v2 --function-name $FN
-  aws_ lambda update-function-configuration --function-name $FN --timeout 30 --memory-size 1024 --environment "$ENV" >/dev/null
+  aws_ lambda update-function-configuration --function-name $FN --timeout 90 --memory-size 1024 --environment "$ENV" >/dev/null
 else
   aws_ lambda create-function --function-name $FN --runtime nodejs22.x --handler index.handler \
-    --role $ROLE --zip-file fileb:///tmp/$FN.zip --timeout 30 --memory-size 1024 --environment "$ENV" >/dev/null
+    --role $ROLE --zip-file fileb:///tmp/$FN.zip --timeout 90 --memory-size 1024 --environment "$ENV" >/dev/null
   aws_ lambda wait function-active-v2 --function-name $FN
   aws_ lambda create-function-url-config --function-name $FN --auth-type NONE \
     --cors "{\"AllowOrigins\":$ORIGINS,\"AllowMethods\":[\"GET\",\"POST\",\"PUT\",\"DELETE\"],\"AllowHeaders\":[\"authorization\",\"content-type\"],\"MaxAge\":86400}" >/dev/null

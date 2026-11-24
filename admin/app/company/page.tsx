@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, errorText, won } from "@/lib/api";
 import { useData } from "@/lib/useData";
+import { createProposal } from "@/lib/proposalApi";
+import { STATUS_LABEL, type Proposal } from "@/lib/proposal";
 import {
   ACTIVITY_TYPES,
   INDUSTRIES,
@@ -65,6 +67,7 @@ export default function CompanyPage() {
         <div className="grid">
           <Lookup company={company} onSaved={reload} />
           <AiDraft company={company} draft={data.aiScore} onSaved={reload} />
+          <Proposals company={company} />
           <CompanyForm key={company.updatedAt} company={company} onSaved={reload} />
         </div>
         <div className="grid">
@@ -661,6 +664,55 @@ function AiDraft({ company, draft, onSaved }: { company: Company; draft: AiScore
             </button>
           </div>
         </>
+      )}
+      {error && <p className="notice">{error}</p>}
+    </section>
+  );
+}
+
+// 이 기업의 제안서·회사소개서
+function Proposals({ company }: { company: Company }) {
+  const router = useRouter();
+  const { data } = useData<{ items: Proposal[] }>("/proposals");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const mine = (data?.items || []).filter((p) => p.companyId === company.id);
+
+  async function create(kind: "mini" | "intro") {
+    setBusy(true);
+    setError("");
+    try {
+      const p = await createProposal(company, kind);
+      router.push(`/proposal/?id=${p.id}`);
+    } catch (e) {
+      setError(errorText(e));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card form">
+      <div className="spread">
+        <h2 style={{ margin: 0 }}>제안서</h2>
+        <div className="row">
+          <button className="btn small" disabled={busy} onClick={() => create("mini")}>
+            미니 제안서 만들기
+          </button>
+          <button className="btn ghost small" disabled={busy} onClick={() => create("intro")}>
+            회사소개서
+          </button>
+        </div>
+      </div>
+      {mine.length === 0 ? (
+        <p className="small muted">산업 템플릿으로 초안을 만들고, 편집 화면에서 AI로 이 기업에 맞게 채울 수 있습니다.</p>
+      ) : (
+        <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
+          {mine.map((p) => (
+            <li key={p.id}>
+              <Link href={`/proposal/?id=${p.id}`}>{p.title}</Link> · {STATUS_LABEL[p.status]} · 열람 {p.views || 0}회
+            </li>
+          ))}
+        </ul>
       )}
       {error && <p className="notice">{error}</p>}
     </section>

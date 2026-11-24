@@ -12,6 +12,7 @@ import {
   DeleteCommand,
   BatchWriteCommand,
 } from "@aws-sdk/lib-dynamodb";
+import { makeProposalRoutes } from "./proposals.mjs";
 
 const TABLE = process.env.TABLE_NAME || "dotmate-sales";
 const REGION = process.env.AWS_REGION || "ap-northeast-2";
@@ -221,6 +222,7 @@ export async function authenticate(header) {
 // 딜:     pk=DEAL           sk=<dealId>   (companyId 속성)
 // 타겟 DB 후보: pk=PROS#<산업> sk=<사업자번호 앞6자리>#<사업장명>  (ym 속성: 국민연금 자료 기준월)
 // 타겟 DB 현황: pk=PROSMETA     sk=latest
+// 제안서: pk=PROP sk=<id>, 링크 코드: pk=PCODE sk=<code>, 열람 기록: pk=PROPVIEW#<id> (proposals.mjs)
 
 async function queryAll(params) {
   const items = [];
@@ -452,6 +454,45 @@ async function aiScoreRoute(id, user) {
   return { aiScore: strip(item), usage: await aiUsage() };
 }
 
+// ---------- 제안서 ----------
+
+async function aiProposal({ company, template, activities, aiScore }) {
+  const usage = await aiUsage();
+  if (usage.usd >= AI_MONTHLY_USD) throw new HttpError(429, "ai_budget");
+  const { draftProposal } = await import("./ai-proposal.mjs");
+  const { AiError } = await import("./ai-score.mjs");
+  try {
+    const r = await draftProposal({ apiKey: AI_KEY, company, template, activities, aiScore });
+    await addAiUsage(r.cost);
+    return { ...r, usage: await aiUsage() };
+  } catch (e) {
+    if (e instanceof AiError) {
+      if (e.cost) await addAiUsage(e.cost);
+      throw new HttpError(e.code === "ai_key_missing" ? 503 : 502, e.code);
+    }
+    throw e;
+  }
+}
+
+let proposalRoutes;
+const proposals = () =>
+  (proposalRoutes ??= makeProposalRoutes({
+    db,
+    TABLE,
+    HttpError,
+    GetCommand,
+    PutCommand,
+    DeleteCommand,
+    queryAll,
+    strip,
+    now,
+    newId,
+    str,
+    getCompany,
+    addActivity,
+    ai: aiProposal,
+  }));
+
 // ---------- 타겟 DB (국민연금 가입 사업장 자료) ----------
 // 관리자 화면이 공공데이터포털의 월간 CSV를 읽어 산업별로 분류한 행을 500개씩 보내고, 여기서는 저장·검색·등록만 합니다.
 
@@ -670,6 +711,7 @@ async function route(method, path, body, user, query = new URLSearchParams()) {
   if (seg[0] === "companies" && seg.length === 3 && seg[2] === "lookup") return lookupRoutes(method, seg[1], body, user);
   if (seg[0] === "companies" && seg.length === 3 && seg[2] === "ai-score" && method === "POST") return aiScoreRoute(seg[1], user);
   if (method === "GET" && path === "/ai/usage") return aiUsage();
+  if (seg[0] === "proposals") return proposals().authed(method, seg, body, user);
 
   if (method === "GET" && path === "/meta") return { stages: STAGES, industries: INDUSTRIES, scoreItems: SCORE_ITEMS, activityTypes: ACTIVITY_TYPES };
   if (method === "GET" && path === "/me") return { email: user.email };
@@ -815,6 +857,20 @@ export const handler = async (event) => {
   const method = event.requestContext?.http?.method || "GET";
   const path = (event.rawPath || "/").replace(/\/+$/, "") || "/";
   if (method === "OPTIONS") return { statusCode: 204 };
+  // 고객이 여는 제안서 링크만 인증 없이 받습니다.
+  const pub = /^\/public\/p\/([^/]+)$/.exec(path);
+  if (pub) {
+    if (method !== "GET") return json(405, { ok: false, error: "method_not_allowed" });
+    try {
+      const ua = event.headers?.["user-agent"] || "";
+      const q = new URLSearchParams(event.rawQueryString || "");
+      return json(200, await proposals().publicView(pub[1], { device: /Mobi|Android|iPhone/i.test(ua) ? "모바일" : "PC", preview: q.get("preview") === "1" }));
+    } catch (err) {
+      if (err instanceof HttpError) return json(err.status, { ok: false, error: err.code });
+      console.error("error", err?.name, err?.message);
+      return json(500, { ok: false, error: "server_error" });
+    }
+  }
   try {
     const user = devUser ?? (await authenticate(event.headers?.authorization));
     let body = {};
