@@ -469,6 +469,17 @@ function Lookup({ company, onSaved }: { company: Company; onSaved: () => void })
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
 
+  // 기업 추가 직후(?lookup=1)에는 바로 찾아봅니다.
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get("lookup") === "1" && !company.crno) {
+      p.delete("lookup");
+      window.history.replaceState(null, "", `${window.location.pathname}?${p}`);
+      find();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function find() {
     setBusy(true);
     setError("");

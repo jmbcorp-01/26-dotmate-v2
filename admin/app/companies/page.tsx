@@ -45,7 +45,7 @@ export default function Companies() {
         <NewCompany
           onCreated={(c) => {
             reload();
-            router.push(`/company/?id=${c.id}`);
+            router.push(`/company/?id=${c.id}&lookup=1`);
           }}
         />
       )}
@@ -153,7 +153,7 @@ function NewCompany({ onCreated }: { onCreated: (c: Company) => void }) {
       {error && <p className="notice">{error}</p>}
       <div>
         <button className="btn" disabled={busy}>
-          추가하고 상세 보기
+          추가하고 공공데이터에서 찾기
         </button>
       </div>
     </form>
