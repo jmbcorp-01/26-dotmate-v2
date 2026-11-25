@@ -12,6 +12,8 @@ import {
   DeleteCommand,
   BatchWriteCommand,
 } from "@aws-sdk/lib-dynamodb";
+import { makeProposalRoutes } from "./proposals.mjs";
+import { makeQuoteRoutes } from "./quotes.mjs";
 
 const TABLE = process.env.TABLE_NAME || "dotmate-sales";
 const REGION = process.env.AWS_REGION || "ap-northeast-2";
@@ -21,7 +23,9 @@ const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || "")
   .split(",")
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean);
-const DATA_KEY = process.env.DATA_GO_KR_KEY || ""; // 공공데이터포털 일반 인증키(Decoding)
+const DATA_KEY = process.env.DATA_GO_KR_KEY || "";
+const AI_KEY = process.env.ANTHROPIC_API_KEY || ""; // Claude API 키 (AI 점수 초안)
+const AI_MONTHLY_USD = Number(process.env.AI_MONTHLY_USD || 30); // 월 예산 약 5만 원 // 공공데이터포털 일반 인증키(Decoding)
 const ISSUER = `https://cognito-idp.${REGION}.amazonaws.com/${POOL_ID}`;
 
 let db = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
@@ -219,6 +223,9 @@ export async function authenticate(header) {
 // 딜:     pk=DEAL           sk=<dealId>   (companyId 속성)
 // 타겟 DB 후보: pk=PROS#<산업> sk=<사업자번호 앞6자리>#<사업장명>  (ym 속성: 국민연금 자료 기준월)
 // 타겟 DB 현황: pk=PROSMETA     sk=latest
+// 제안서: pk=PROP sk=<id>, 링크 코드: pk=PCODE sk=<code>, 열람 기록: pk=PROPVIEW#<id> (proposals.mjs)
+// 영업 준비(웹 조사): pk=CO#<id> sk=PREP
+// 견적서: pk=QUOTE sk=<id>, 링크 코드: pk=QCODE, 열람 기록: pk=QUOTEVIEW#<id>, 설정: pk=SETTINGS sk=quote (quotes.mjs)
 
 async function queryAll(params) {
   const items = [];
@@ -404,6 +411,121 @@ async function lookupRoutes(method, id, body, user) {
   }
   throw new HttpError(404, "not_found");
 }
+
+
+// ---------- AI 점수 초안 ----------
+// 사용액: pk=AIUSAGE sk=<YYYY-MM>  /  초안: pk=CO#<id> sk=AISCORE
+
+const month = () => new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 7); // 한국 시간 기준 월
+
+async function aiUsage() {
+  const r = await db.send(new GetCommand({ TableName: TABLE, Key: { pk: "AIUSAGE", sk: month() } }));
+  return { month: month(), usd: r.Item?.usd || 0, calls: r.Item?.calls || 0, cap: AI_MONTHLY_USD };
+}
+
+async function addAiUsage(usd) {
+  const u = await aiUsage();
+  await db.send(
+    new PutCommand({ TableName: TABLE, Item: { pk: "AIUSAGE", sk: u.month, usd: Math.round((u.usd + usd) * 10000) / 10000, calls: u.calls + 1, updatedAt: now() } }),
+  );
+}
+
+async function aiScoreRoute(id, user) {
+  const usage = await aiUsage();
+  if (usage.usd >= AI_MONTHLY_USD) throw new HttpError(429, "ai_budget");
+  const company = await getCompany(id);
+  const children = await queryAll({ KeyConditionExpression: "pk = :p", ExpressionAttributeValues: { ":p": `CO#${id}` }, ScanIndexForward: false });
+  const { scoreCompany, AiError } = await import("./ai-score.mjs");
+  let draft;
+  try {
+    draft = await scoreCompany({
+      apiKey: AI_KEY,
+      company,
+      activities: children.filter((c) => c.sk.startsWith("ACT#")),
+      contacts: children.filter((c) => c.sk.startsWith("CONTACT#")),
+    });
+  } catch (e) {
+    if (e instanceof AiError) {
+      if (e.cost) await addAiUsage(e.cost);
+      throw new HttpError(e.code === "ai_key_missing" ? 503 : 502, e.code);
+    }
+    throw e;
+  }
+  await addAiUsage(draft.cost);
+  const item = { pk: `CO#${id}`, sk: "AISCORE", companyId: id, ...draft, at: now(), by: user.email };
+  await db.send(new PutCommand({ TableName: TABLE, Item: item }));
+  return { aiScore: strip(item), usage: await aiUsage() };
+}
+
+// ---------- 영업 준비 (웹 조사: 연락 창구, 담당자, 진단, 연락 문구) ----------
+// pk=CO#<id> sk=PREP
+
+async function prepRoute(id, user) {
+  const usage = await aiUsage();
+  if (usage.usd >= AI_MONTHLY_USD) throw new HttpError(429, "ai_budget");
+  const company = await getCompany(id);
+  const children = await queryAll({ KeyConditionExpression: "pk = :p", ExpressionAttributeValues: { ":p": `CO#${id}` } });
+  const { prepareSales } = await import("./ai-prep.mjs");
+  const { AiError } = await import("./ai-score.mjs");
+  let r;
+  try {
+    // PREP_NO_FETCH=1: 웹 페이지 읽기가 막힌 로컬 테스트용
+    r = await prepareSales({ apiKey: AI_KEY, company, contacts: children.filter((c) => c.sk.startsWith("CONTACT#")), fetchPages: process.env.PREP_NO_FETCH !== "1" });
+  } catch (e) {
+    if (e instanceof AiError) {
+      if (e.cost) await addAiUsage(e.cost);
+      throw new HttpError(e.code === "ai_key_missing" ? 503 : 502, e.code);
+    }
+    throw e;
+  }
+  await addAiUsage(r.cost);
+  const item = { pk: `CO#${id}`, sk: "PREP", companyId: id, ...r.prep, model: r.model, cost: r.cost, searches: r.searches, at: now(), by: user.email };
+  await db.send(new PutCommand({ TableName: TABLE, Item: item }));
+  return { prep: strip(item), usage: await aiUsage() };
+}
+
+// ---------- 제안서 ----------
+
+async function aiProposal({ company, template, activities, aiScore, prep }) {
+  const usage = await aiUsage();
+  if (usage.usd >= AI_MONTHLY_USD) throw new HttpError(429, "ai_budget");
+  const { draftProposal } = await import("./ai-proposal.mjs");
+  const { AiError } = await import("./ai-score.mjs");
+  try {
+    const r = await draftProposal({ apiKey: AI_KEY, company, template, activities, aiScore, prep });
+    await addAiUsage(r.cost);
+    return { ...r, usage: await aiUsage() };
+  } catch (e) {
+    if (e instanceof AiError) {
+      if (e.cost) await addAiUsage(e.cost);
+      throw new HttpError(e.code === "ai_key_missing" ? 503 : 502, e.code);
+    }
+    throw e;
+  }
+}
+
+let proposalRoutes;
+const proposals = () =>
+  (proposalRoutes ??= makeProposalRoutes({
+    db,
+    TABLE,
+    HttpError,
+    GetCommand,
+    PutCommand,
+    DeleteCommand,
+    queryAll,
+    strip,
+    now,
+    newId,
+    str,
+    getCompany,
+    addActivity,
+    ai: aiProposal,
+  }));
+
+let quoteRoutes;
+const quotes = () =>
+  (quoteRoutes ??= makeQuoteRoutes({ db, TABLE, HttpError, GetCommand, PutCommand, DeleteCommand, queryAll, strip, now, newId, str, getCompany, addActivity }));
 
 // ---------- 타겟 DB (국민연금 가입 사업장 자료) ----------
 // 관리자 화면이 공공데이터포털의 월간 CSV를 읽어 산업별로 분류한 행을 500개씩 보내고, 여기서는 저장·검색·등록만 합니다.
@@ -621,6 +743,11 @@ async function route(method, path, body, user, query = new URLSearchParams()) {
   const seg = path.split("/").filter(Boolean);
   if (seg[0] === "prospects") return prospectRoutes(method, seg, body, query, user);
   if (seg[0] === "companies" && seg.length === 3 && seg[2] === "lookup") return lookupRoutes(method, seg[1], body, user);
+  if (seg[0] === "companies" && seg.length === 3 && seg[2] === "ai-score" && method === "POST") return aiScoreRoute(seg[1], user);
+  if (method === "GET" && path === "/ai/usage") return aiUsage();
+  if (seg[0] === "companies" && seg.length === 3 && seg[2] === "prep" && method === "POST") return prepRoute(seg[1], user);
+  if (seg[0] === "proposals") return proposals().authed(method, seg, body, user);
+  if (seg[0] === "quotes" || (seg[0] === "settings" && seg[1] === "quote")) return quotes().authed(method, seg, body, user);
 
   if (method === "GET" && path === "/meta") return { stages: STAGES, industries: INDUSTRIES, scoreItems: SCORE_ITEMS, activityTypes: ACTIVITY_TYPES };
   if (method === "GET" && path === "/me") return { email: user.email };
@@ -648,6 +775,14 @@ async function route(method, path, body, user, query = new URLSearchParams()) {
         company,
         contacts: children.filter((c) => c.sk.startsWith("CONTACT#")).map(strip),
         activities: children.filter((c) => c.sk.startsWith("ACT#")).map(strip),
+        aiScore: (() => {
+          const a = children.find((c) => c.sk === "AISCORE");
+          return a ? strip(a) : null;
+        })(),
+        prep: (() => {
+          const a = children.find((c) => c.sk === "PREP");
+          return a ? strip(a) : null;
+        })(),
         deals,
       };
     }
@@ -762,6 +897,34 @@ export const handler = async (event) => {
   const method = event.requestContext?.http?.method || "GET";
   const path = (event.rawPath || "/").replace(/\/+$/, "") || "/";
   if (method === "OPTIONS") return { statusCode: 204 };
+  // 고객이 여는 제안서·견적서 링크만 인증 없이 받습니다.
+  const pub = /^\/public\/(p|q)\/([^/]+)(?:\/(approve|request))?$/.exec(path);
+  if (pub) {
+    try {
+      const ua = event.headers?.["user-agent"] || "";
+      const q = new URLSearchParams(event.rawQueryString || "");
+      const meta = { device: /Mobi|Android|iPhone/i.test(ua) ? "모바일" : "PC", preview: q.get("preview") === "1" };
+      if (pub[1] === "p") {
+        if (method !== "GET" || pub[3]) return json(405, { ok: false, error: "method_not_allowed" });
+        return json(200, await proposals().publicView(pub[2], meta));
+      }
+      let body = {};
+      if (event.body) {
+        const raw = event.isBase64Encoded ? Buffer.from(event.body, "base64").toString("utf8") : event.body;
+        if (raw.length > 10_000) throw new HttpError(413, "too_large");
+        try {
+          body = JSON.parse(raw);
+        } catch {
+          throw new HttpError(400, "bad_json");
+        }
+      }
+      return json(200, await quotes().publicRoute(method, pub[2], pub[3], body, meta));
+    } catch (err) {
+      if (err instanceof HttpError) return json(err.status, { ok: false, error: err.code });
+      console.error("error", err?.name, err?.message);
+      return json(500, { ok: false, error: "server_error" });
+    }
+  }
   try {
     const user = devUser ?? (await authenticate(event.headers?.authorization));
     let body = {};

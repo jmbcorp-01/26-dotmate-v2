@@ -5,6 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, errorText, won } from "@/lib/api";
 import { useData } from "@/lib/useData";
+import { createProposal } from "@/lib/proposalApi";
+import { createQuote, useQuoteSettings } from "@/lib/quoteApi";
+import { QUOTE_STATUS, eokMan, type Quote } from "@/lib/quote";
+import { STATUS_LABEL, type Proposal } from "@/lib/proposal";
 import {
   ACTIVITY_TYPES,
   INDUSTRIES,
@@ -12,12 +16,14 @@ import {
   SCORE_ITEMS,
   STAGES,
   type Activity,
+  type AiScore,
+  type SalesPrep,
   type Company,
   type Contact,
   type Deal,
 } from "@/lib/types";
 
-type Detail = { company: Company; contacts: Contact[]; activities: Activity[]; deals: Deal[] };
+type Detail = { company: Company; contacts: Contact[]; activities: Activity[]; deals: Deal[]; aiScore: AiScore | null; prep: SalesPrep | null };
 
 export default function CompanyPage() {
   const [id, setId] = useState<string | null>(null);
@@ -63,6 +69,10 @@ export default function CompanyPage() {
       <div className="grid grid-2">
         <div className="grid">
           <Lookup company={company} onSaved={reload} />
+          <AiDraft company={company} draft={data.aiScore} onSaved={reload} />
+          <Prep company={company} prep={data.prep} contacts={data.contacts} onSaved={reload} />
+          <Proposals company={company} />
+          <Quotes company={company} />
           <CompanyForm key={company.updatedAt} company={company} onSaved={reload} />
         </div>
         <div className="grid">
@@ -564,6 +574,365 @@ function Lookup({ company, onSaved }: { company: Company; onSaved: () => void })
         </div>
       )}
       {msg && <p className="notice ok">{msg}</p>}
+      {error && <p className="notice">{error}</p>}
+    </section>
+  );
+}
+
+// AI 점수 초안: 6개 항목 점수와 근거를 만들고, 확인 후 "이 점수로 적용"을 누르면 기업 점수가 됩니다.
+function AiDraft({ company, draft, onSaved }: { company: Company; draft: AiScore | null; onSaved: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [usage, setUsage] = useState<{ usd: number; cap: number } | null>(null);
+  const applied = !!draft && SCORE_ITEMS.every((i) => company.score[i.key] === draft.score[i.key]);
+
+  async function make() {
+    setBusy(true);
+    setError("");
+    try {
+      const r = await api<{ usage: { usd: number; cap: number } }>(`/companies/${company.id}/ai-score`, { method: "POST" });
+      setUsage(r.usage);
+      onSaved();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function apply() {
+    if (!draft) return;
+    setBusy(true);
+    setError("");
+    try {
+      await api(`/companies/${company.id}`, { method: "PUT", body: { ...company, score: draft.score } });
+      onSaved();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const grade = (t: number) => (t >= 80 ? "A" : t >= 60 ? "B" : "C");
+
+  return (
+    <section className="card form">
+      <div className="spread">
+        <h2 style={{ margin: 0 }}>AI 점수 초안</h2>
+        <button className="btn ghost small" disabled={busy} onClick={make}>
+          {busy ? "만드는 중... (10~20초)" : draft ? "다시 만들기" : "AI 초안 만들기"}
+        </button>
+      </div>
+      {!draft && !busy && (
+        <p className="small muted">
+          기업 정보, 메모, 영업 기록을 보고 6개 항목 점수와 근거를 제안합니다. 정보가 많을수록 정확해지니 공공데이터 정보를 먼저 채우는 게 좋습니다.
+        </p>
+      )}
+      {draft && (
+        <>
+          <p>
+            <span className={`badge ${grade(draft.total)}`}>
+              {grade(draft.total)} · {draft.total}점
+            </span>{" "}
+            <span className="small">{draft.summary}</span>
+          </p>
+          <div className="grid" style={{ gap: 8 }}>
+            {SCORE_ITEMS.map((i) => (
+              <div key={i.key}>
+                <div className="spread small">
+                  <strong>{i.label}</strong>
+                  <span>
+                    {draft.score[i.key]} / {i.max}
+                    {company.score[i.key] !== undefined && company.score[i.key] !== draft.score[i.key] && (
+                      <span className="muted"> (현재 {company.score[i.key]})</span>
+                    )}
+                  </span>
+                </div>
+                <p className="small muted">{draft.reasons[i.key]}</p>
+              </div>
+            ))}
+          </div>
+          {draft.nextAction && (
+            <p className="notice ok">
+              <strong>다음 할 일</strong> {draft.nextAction}
+            </p>
+          )}
+          {draft.missingInfo.length > 0 && <div className="small muted">확인하면 더 정확해지는 정보: {draft.missingInfo.join(" · ")}</div>}
+          <div className="spread">
+            <span className="small muted">
+              {new Date(draft.at).toLocaleString("ko-KR")} 생성
+              {usage && ` · 이번 달 AI 사용 $${usage.usd.toFixed(2)} / $${usage.cap}`}
+            </span>
+            <button className="btn small" disabled={busy || applied} onClick={apply}>
+              {applied ? "적용됨" : "이 점수로 적용"}
+            </button>
+          </div>
+        </>
+      )}
+      {error && <p className="notice">{error}</p>}
+    </section>
+  );
+}
+
+// 이 기업의 제안서·회사소개서
+function Proposals({ company }: { company: Company }) {
+  const router = useRouter();
+  const { data } = useData<{ items: Proposal[] }>("/proposals");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const mine = (data?.items || []).filter((p) => p.companyId === company.id);
+
+  async function create(kind: "mini" | "intro") {
+    setBusy(true);
+    setError("");
+    try {
+      const p = await createProposal(company, kind);
+      router.push(`/proposal/?id=${p.id}`);
+    } catch (e) {
+      setError(errorText(e));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card form">
+      <div className="spread">
+        <h2 style={{ margin: 0 }}>제안서</h2>
+        <div className="row">
+          <button className="btn small" disabled={busy} onClick={() => create("mini")}>
+            미니 제안서 만들기
+          </button>
+          <button className="btn ghost small" disabled={busy} onClick={() => create("intro")}>
+            회사소개서
+          </button>
+        </div>
+      </div>
+      {mine.length === 0 ? (
+        <p className="small muted">산업 템플릿으로 초안을 만들고, 편집 화면에서 AI로 이 기업에 맞게 채울 수 있습니다.</p>
+      ) : (
+        <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
+          {mine.map((p) => (
+            <li key={p.id}>
+              <Link href={`/proposal/?id=${p.id}`}>{p.title}</Link> · {STATUS_LABEL[p.status]} · 열람 {p.views || 0}회
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && <p className="notice">{error}</p>}
+    </section>
+  );
+}
+
+// 이 기업의 견적서
+function Quotes({ company }: { company: Company }) {
+  const router = useRouter();
+  const { data } = useData<{ items: Quote[] }>("/quotes");
+  const { settings } = useQuoteSettings();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const mine = (data?.items || []).filter((q) => q.companyId === company.id && q.status !== "superseded");
+
+  async function create() {
+    setBusy(true);
+    setError("");
+    try {
+      const q = await createQuote(company, settings);
+      router.push(`/quote/?id=${q.id}`);
+    } catch (e) {
+      setError(errorText(e));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card form">
+      <div className="spread">
+        <h2 style={{ margin: 0 }}>견적서</h2>
+        <button className="btn small" disabled={busy} onClick={create}>
+          견적 만들기
+        </button>
+      </div>
+      {mine.length === 0 ? (
+        <p className="small muted">2026년 SW기술자 단가로 기준가를 계산하고, 산업에 맞는 지급 방식으로 시작합니다.</p>
+      ) : (
+        <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
+          {mine.map((q) => (
+            <li key={q.id}>
+              <Link href={`/quote/?id=${q.id}`}>{q.title}</Link> v{q.version} · {eokMan(q.totals?.supply || 0)} · {QUOTE_STATUS[q.status]}
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && <p className="notice">{error}</p>}
+    </section>
+  );
+}
+
+// 영업 준비: 웹에서 공식 연락 창구, 공개된 담당자, 홈페이지 개선점, 첫 연락 문구를 찾아 정리합니다.
+function Prep({ company, prep, contacts, onSaved }: { company: Company; prep: SalesPrep | null; contacts: Contact[]; onSaved: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState("");
+  const [usage, setUsage] = useState<{ usd: number; cap: number } | null>(null);
+  const have = new Set(contacts.map((c) => c.name));
+
+  async function run() {
+    setBusy(true);
+    setError("");
+    try {
+      const r = await api<{ usage: { usd: number; cap: number } }>(`/companies/${company.id}/prep`, { method: "POST" });
+      setUsage(r.usage);
+      onSaved();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function addContact(p: SalesPrep["people"][number]) {
+    try {
+      await api(`/companies/${company.id}/contacts`, { method: "POST", body: { name: p.name, title: p.title, memo: `${p.note}\n출처: ${p.source}` } });
+      onSaved();
+    } catch (e) {
+      setError(errorText(e));
+    }
+  }
+
+  async function copy(key: string, text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(key);
+      setTimeout(() => setCopied(""), 1500);
+    } catch {
+      prompt("복사하세요", text);
+    }
+  }
+
+  const src = (url: string) =>
+    url ? (
+      <a className="small muted" href={url} target="_blank" rel="noreferrer">
+        출처
+      </a>
+    ) : null;
+
+  const scripts: [string, string][] = prep
+    ? [
+        ["문의 폼·링크드인 메시지", prep.outreach.message],
+        ["전화 스크립트", prep.outreach.phone],
+        ["3일 뒤 후속", prep.outreach.followup3],
+        ["7일 뒤 후속", prep.outreach.followup7],
+      ]
+    : [];
+
+  return (
+    <section className="card form">
+      <div className="spread">
+        <h2 style={{ margin: 0 }}>영업 준비</h2>
+        <button className="btn ghost small" disabled={busy} onClick={run}>
+          {busy ? "웹 조사 중... (1분 안팎)" : prep ? "다시 조사" : "웹에서 조사하기"}
+        </button>
+      </div>
+      {!prep && !busy && (
+        <p className="small muted">
+          웹을 검색해 공식 연락 창구, 공개된 담당자, 홈페이지 개선점 3가지, 첫 연락·전화·후속 문구를 출처와 함께 만듭니다. 개인 휴대폰·개인 메일은 다루지 않습니다. 한 번에 약 300~500원.
+        </p>
+      )}
+      {prep && (
+        <>
+          <p className="small">{prep.summary}</p>
+          <p className="small muted">
+            {prep.website && (
+              <a href={prep.website} target="_blank" rel="noreferrer">
+                {prep.website}
+              </a>
+            )}
+            {prep.platform && ` · 플랫폼: ${prep.platform}`}
+          </p>
+
+          <div>
+            <strong className="small">공식 연락 창구</strong>
+            {prep.channels.length === 0 ? (
+              <p className="small muted">찾지 못했습니다.</p>
+            ) : (
+              <ul className="small" style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+                {prep.channels.map((c, i) => (
+                  <li key={i}>
+                    {c.type}:{" "}
+                    {/^https?:/.test(c.value) ? (
+                      <a href={c.value} target="_blank" rel="noreferrer">
+                        {c.value}
+                      </a>
+                    ) : (
+                      c.value
+                    )}{" "}
+                    {src(c.source)}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div>
+            <strong className="small">공개된 담당자</strong>
+            {prep.people.length === 0 ? (
+              <p className="small muted">찾지 못했습니다. 대표번호로 전화해 담당 부서를 물어보는 게 빠릅니다.</p>
+            ) : (
+              <ul className="small" style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+                {prep.people.map((p, i) => (
+                  <li key={i} style={{ marginBottom: 4 }}>
+                    <strong>{p.name}</strong> {p.title} {src(p.source)}{" "}
+                    {have.has(p.name) ? (
+                      <span className="badge good">담당자 등록됨</span>
+                    ) : (
+                      <button className="btn ghost small" onClick={() => addContact(p)}>
+                        담당자로 추가
+                      </button>
+                    )}
+                    <div className="muted">{p.note}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div>
+            <strong className="small">홈페이지·업무 개선점</strong>
+            <ol className="small" style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+              {prep.findings.map((f, i) => (
+                <li key={i} style={{ marginBottom: 6 }}>
+                  <strong>{f.issue}</strong> {src(f.source)}
+                  <div className="muted">{f.evidence}</div>
+                  <div>제안: {f.suggestion}</div>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          <div className="grid" style={{ gap: 8 }}>
+            {scripts.map(([label, text]) => (
+              <div key={label}>
+                <div className="spread">
+                  <strong className="small">{label}</strong>
+                  <button className="btn ghost small" onClick={() => copy(label, text)}>
+                    {copied === label ? "복사됨" : "복사"}
+                  </button>
+                </div>
+                <p className="small" style={{ whiteSpace: "pre-line", margin: "4px 0 0" }}>
+                  {text}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          {prep.notes && <p className="small muted">참고: {prep.notes}</p>}
+          <p className="small muted">
+            {new Date(prep.at).toLocaleString("ko-KR")} 조사 · 검색 {prep.searches}회 · 약 {Math.round(prep.cost * 1450).toLocaleString("ko-KR")}원
+            {usage && ` · 이번 달 AI 사용 $${usage.usd.toFixed(2)} / $${usage.cap}`}. 웹 정보라 틀릴 수 있으니 연락 전에 출처를 한 번 확인하세요.
+          </p>
+        </>
+      )}
       {error && <p className="notice">{error}</p>}
     </section>
   );

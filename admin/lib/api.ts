@@ -23,6 +23,19 @@ const MESSAGES: Record<string, string> = {
   data_limit: "공공데이터포털 하루 조회 한도를 넘었습니다. 내일 다시 시도해 주세요.",
   data_unreachable: "공공데이터포털에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.",
   data_error: "공공데이터포털 조회 중 오류가 났습니다. 잠시 후 다시 시도해 주세요.",
+  ai_key_missing: "Claude API 키가 아직 서버에 설정되지 않았습니다.",
+  ai_key_invalid: "Claude API 키가 올바르지 않거나 사용이 막혀 있습니다.",
+  ai_billing: "Claude API 결제 정보나 크레딧을 확인해 주세요.",
+  ai_budget: "이번 달 AI 사용 예산을 다 썼습니다. 다음 달에 다시 쓸 수 있습니다.",
+  ai_rate_limited: "AI 요청이 몰렸습니다. 잠시 후 다시 시도해 주세요.",
+  ai_unreachable: "Claude API에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+  ai_refused: "AI가 이 요청을 처리하지 않았습니다. 기업 정보나 메모를 확인해 주세요.",
+  ai_error: "AI 초안을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.",
+  proposal_unverified: "확인하지 않은 AI 초안 블록이 있습니다. 모든 블록을 확인한 뒤 발송해 주세요.",
+  proposal_closed: "닫힌 문서입니다. 다시 열고 고쳐 주세요.",
+  expired: "열람 기간이 끝난 링크입니다.",
+  quote_locked: "발송했거나 승인된 견적은 고칠 수 없습니다. \"수정본 만들기\"로 새 버전을 만드세요.",
+  quote_empty: "견적 금액이 0원입니다. 항목을 먼저 넣어 주세요.",
 };
 export const errorText = (e: unknown) =>
   e instanceof ApiError ? MESSAGES[e.code] || `요청을 처리하지 못했습니다 (${e.code}).` : "서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.";
@@ -55,3 +68,20 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
 
 export const won = (n?: number) => (n ? n.toLocaleString("ko-KR") + "원" : "-");
 export const manwon = (n?: number) => (n ? Math.round(n / 10000).toLocaleString("ko-KR") + "만" : "0");
+
+// 고객용 공개 링크 (로그인 없음)
+export async function publicApi<T>(path: string): Promise<T> {
+  if (!API) throw new ApiError(0, "api_url_missing");
+  const res = await fetch(API + path);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, data.error || "error");
+  return data as T;
+}
+
+export async function publicPost<T>(path: string, body: unknown): Promise<T> {
+  if (!API) throw new ApiError(0, "api_url_missing");
+  const res = await fetch(API + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, data.error || "error");
+  return data as T;
+}

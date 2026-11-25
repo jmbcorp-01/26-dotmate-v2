@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/sync-site.mjs",
     "dev": "next dev -p 3001",
+    "prebuild": "node scripts/sync-site.mjs",
     "build": "next build",
     "mock": "node scripts/mock-api.mjs"
   },
