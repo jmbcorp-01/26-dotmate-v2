@@ -17,12 +17,13 @@ import {
   STAGES,
   type Activity,
   type AiScore,
+  type SalesPrep,
   type Company,
   type Contact,
   type Deal,
 } from "@/lib/types";
 
-type Detail = { company: Company; contacts: Contact[]; activities: Activity[]; deals: Deal[]; aiScore: AiScore | null };
+type Detail = { company: Company; contacts: Contact[]; activities: Activity[]; deals: Deal[]; aiScore: AiScore | null; prep: SalesPrep | null };
 
 export default function CompanyPage() {
   const [id, setId] = useState<string | null>(null);
@@ -69,6 +70,7 @@ export default function CompanyPage() {
         <div className="grid">
           <Lookup company={company} onSaved={reload} />
           <AiDraft company={company} draft={data.aiScore} onSaved={reload} />
+          <Prep company={company} prep={data.prep} contacts={data.contacts} onSaved={reload} />
           <Proposals company={company} />
           <Quotes company={company} />
           <CompanyForm key={company.updatedAt} company={company} onSaved={reload} />
@@ -761,6 +763,175 @@ function Quotes({ company }: { company: Company }) {
             </li>
           ))}
         </ul>
+      )}
+      {error && <p className="notice">{error}</p>}
+    </section>
+  );
+}
+
+// 영업 준비: 웹에서 공식 연락 창구, 공개된 담당자, 홈페이지 개선점, 첫 연락 문구를 찾아 정리합니다.
+function Prep({ company, prep, contacts, onSaved }: { company: Company; prep: SalesPrep | null; contacts: Contact[]; onSaved: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState("");
+  const [usage, setUsage] = useState<{ usd: number; cap: number } | null>(null);
+  const have = new Set(contacts.map((c) => c.name));
+
+  async function run() {
+    setBusy(true);
+    setError("");
+    try {
+      const r = await api<{ usage: { usd: number; cap: number } }>(`/companies/${company.id}/prep`, { method: "POST" });
+      setUsage(r.usage);
+      onSaved();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function addContact(p: SalesPrep["people"][number]) {
+    try {
+      await api(`/companies/${company.id}/contacts`, { method: "POST", body: { name: p.name, title: p.title, memo: `${p.note}\n출처: ${p.source}` } });
+      onSaved();
+    } catch (e) {
+      setError(errorText(e));
+    }
+  }
+
+  async function copy(key: string, text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(key);
+      setTimeout(() => setCopied(""), 1500);
+    } catch {
+      prompt("복사하세요", text);
+    }
+  }
+
+  const src = (url: string) =>
+    url ? (
+      <a className="small muted" href={url} target="_blank" rel="noreferrer">
+        출처
+      </a>
+    ) : null;
+
+  const scripts: [string, string][] = prep
+    ? [
+        ["문의 폼·링크드인 메시지", prep.outreach.message],
+        ["전화 스크립트", prep.outreach.phone],
+        ["3일 뒤 후속", prep.outreach.followup3],
+        ["7일 뒤 후속", prep.outreach.followup7],
+      ]
+    : [];
+
+  return (
+    <section className="card form">
+      <div className="spread">
+        <h2 style={{ margin: 0 }}>영업 준비</h2>
+        <button className="btn ghost small" disabled={busy} onClick={run}>
+          {busy ? "웹 조사 중... (1분 안팎)" : prep ? "다시 조사" : "웹에서 조사하기"}
+        </button>
+      </div>
+      {!prep && !busy && (
+        <p className="small muted">
+          웹을 검색해 공식 연락 창구, 공개된 담당자, 홈페이지 개선점 3가지, 첫 연락·전화·후속 문구를 출처와 함께 만듭니다. 개인 휴대폰·개인 메일은 다루지 않습니다. 한 번에 약 300~500원.
+        </p>
+      )}
+      {prep && (
+        <>
+          <p className="small">{prep.summary}</p>
+          <p className="small muted">
+            {prep.website && (
+              <a href={prep.website} target="_blank" rel="noreferrer">
+                {prep.website}
+              </a>
+            )}
+            {prep.platform && ` · 플랫폼: ${prep.platform}`}
+          </p>
+
+          <div>
+            <strong className="small">공식 연락 창구</strong>
+            {prep.channels.length === 0 ? (
+              <p className="small muted">찾지 못했습니다.</p>
+            ) : (
+              <ul className="small" style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+                {prep.channels.map((c, i) => (
+                  <li key={i}>
+                    {c.type}:{" "}
+                    {/^https?:/.test(c.value) ? (
+                      <a href={c.value} target="_blank" rel="noreferrer">
+                        {c.value}
+                      </a>
+                    ) : (
+                      c.value
+                    )}{" "}
+                    {src(c.source)}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div>
+            <strong className="small">공개된 담당자</strong>
+            {prep.people.length === 0 ? (
+              <p className="small muted">찾지 못했습니다. 대표번호로 전화해 담당 부서를 물어보는 게 빠릅니다.</p>
+            ) : (
+              <ul className="small" style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+                {prep.people.map((p, i) => (
+                  <li key={i} style={{ marginBottom: 4 }}>
+                    <strong>{p.name}</strong> {p.title} {src(p.source)}{" "}
+                    {have.has(p.name) ? (
+                      <span className="badge good">담당자 등록됨</span>
+                    ) : (
+                      <button className="btn ghost small" onClick={() => addContact(p)}>
+                        담당자로 추가
+                      </button>
+                    )}
+                    <div className="muted">{p.note}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div>
+            <strong className="small">홈페이지·업무 개선점</strong>
+            <ol className="small" style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+              {prep.findings.map((f, i) => (
+                <li key={i} style={{ marginBottom: 6 }}>
+                  <strong>{f.issue}</strong> {src(f.source)}
+                  <div className="muted">{f.evidence}</div>
+                  <div>제안: {f.suggestion}</div>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          <div className="grid" style={{ gap: 8 }}>
+            {scripts.map(([label, text]) => (
+              <div key={label}>
+                <div className="spread">
+                  <strong className="small">{label}</strong>
+                  <button className="btn ghost small" onClick={() => copy(label, text)}>
+                    {copied === label ? "복사됨" : "복사"}
+                  </button>
+                </div>
+                <p className="small" style={{ whiteSpace: "pre-line", margin: "4px 0 0" }}>
+                  {text}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          {prep.notes && <p className="small muted">참고: {prep.notes}</p>}
+          <p className="small muted">
+            {new Date(prep.at).toLocaleString("ko-KR")} 조사 · 검색 {prep.searches}회 · 약 {Math.round(prep.cost * 1450).toLocaleString("ko-KR")}원
+            {usage && ` · 이번 달 AI 사용 $${usage.usd.toFixed(2)} / $${usage.cap}`}. 웹 정보라 틀릴 수 있으니 연락 전에 출처를 한 번 확인하세요.
+          </p>
+        </>
       )}
       {error && <p className="notice">{error}</p>}
     </section>

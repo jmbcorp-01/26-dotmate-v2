@@ -45,7 +45,7 @@ export const BLOCK_KEYS = ["cover", "situation", "problems", "areas", "beforeAft
 
 let client = null;
 
-export async function draftProposal({ apiKey, company, template, activities = [], aiScore, timeout = 80_000 }) {
+export async function draftProposal({ apiKey, company, template, activities = [], aiScore, prep, timeout = 80_000 }) {
   if (!apiKey) throw new AiError("ai_key_missing");
   client ??= new Anthropic({ apiKey, timeout, maxRetries: 0 });
   const f = (label, v) => (v ? `- ${label}: ${v}` : null);
@@ -60,6 +60,10 @@ export async function draftProposal({ apiKey, company, template, activities = []
     f("사용 플랫폼", company.platform),
     company.memo ? `메모:\n${company.memo}` : null,
     aiScore?.summary ? `영업 분석 요약: ${aiScore.summary}` : null,
+    prep?.summary ? `웹 조사 요약 (출처 확인됨): ${prep.summary}` : null,
+    prep?.findings?.length
+      ? `웹 조사로 확인한 개선점:\n${prep.findings.map((x) => `- ${x.issue}: ${x.evidence}`).join("\n")}`
+      : null,
     activities.length
       ? `최근 영업 기록:\n${activities
           .slice(0, 8)

@@ -104,3 +104,19 @@ export type AiScore = {
   cost: number;
   at: string;
 };
+
+// 영업 준비 (웹 조사)
+export type SalesPrep = {
+  companyId: string;
+  summary: string;
+  website: string;
+  platform: string;
+  channels: { type: string; value: string; source: string }[];
+  people: { name: string; title: string; source: string; note: string }[];
+  findings: { issue: string; evidence: string; suggestion: string; source: string }[];
+  outreach: { message: string; phone: string; followup3: string; followup7: string };
+  notes: string;
+  cost: number;
+  searches: number;
+  at: string;
+};

@@ -224,6 +224,7 @@ export async function authenticate(header) {
 // 타겟 DB 후보: pk=PROS#<산업> sk=<사업자번호 앞6자리>#<사업장명>  (ym 속성: 국민연금 자료 기준월)
 // 타겟 DB 현황: pk=PROSMETA     sk=latest
 // 제안서: pk=PROP sk=<id>, 링크 코드: pk=PCODE sk=<code>, 열람 기록: pk=PROPVIEW#<id> (proposals.mjs)
+// 영업 준비(웹 조사): pk=CO#<id> sk=PREP
 // 견적서: pk=QUOTE sk=<id>, 링크 코드: pk=QCODE, 열람 기록: pk=QUOTEVIEW#<id>, 설정: pk=SETTINGS sk=quote (quotes.mjs)
 
 async function queryAll(params) {
@@ -456,15 +457,42 @@ async function aiScoreRoute(id, user) {
   return { aiScore: strip(item), usage: await aiUsage() };
 }
 
+// ---------- 영업 준비 (웹 조사: 연락 창구, 담당자, 진단, 연락 문구) ----------
+// pk=CO#<id> sk=PREP
+
+async function prepRoute(id, user) {
+  const usage = await aiUsage();
+  if (usage.usd >= AI_MONTHLY_USD) throw new HttpError(429, "ai_budget");
+  const company = await getCompany(id);
+  const children = await queryAll({ KeyConditionExpression: "pk = :p", ExpressionAttributeValues: { ":p": `CO#${id}` } });
+  const { prepareSales } = await import("./ai-prep.mjs");
+  const { AiError } = await import("./ai-score.mjs");
+  let r;
+  try {
+    // PREP_NO_FETCH=1: 웹 페이지 읽기가 막힌 로컬 테스트용
+    r = await prepareSales({ apiKey: AI_KEY, company, contacts: children.filter((c) => c.sk.startsWith("CONTACT#")), fetchPages: process.env.PREP_NO_FETCH !== "1" });
+  } catch (e) {
+    if (e instanceof AiError) {
+      if (e.cost) await addAiUsage(e.cost);
+      throw new HttpError(e.code === "ai_key_missing" ? 503 : 502, e.code);
+    }
+    throw e;
+  }
+  await addAiUsage(r.cost);
+  const item = { pk: `CO#${id}`, sk: "PREP", companyId: id, ...r.prep, model: r.model, cost: r.cost, searches: r.searches, at: now(), by: user.email };
+  await db.send(new PutCommand({ TableName: TABLE, Item: item }));
+  return { prep: strip(item), usage: await aiUsage() };
+}
+
 // ---------- 제안서 ----------
 
-async function aiProposal({ company, template, activities, aiScore }) {
+async function aiProposal({ company, template, activities, aiScore, prep }) {
   const usage = await aiUsage();
   if (usage.usd >= AI_MONTHLY_USD) throw new HttpError(429, "ai_budget");
   const { draftProposal } = await import("./ai-proposal.mjs");
   const { AiError } = await import("./ai-score.mjs");
   try {
-    const r = await draftProposal({ apiKey: AI_KEY, company, template, activities, aiScore });
+    const r = await draftProposal({ apiKey: AI_KEY, company, template, activities, aiScore, prep });
     await addAiUsage(r.cost);
     return { ...r, usage: await aiUsage() };
   } catch (e) {
@@ -717,6 +745,7 @@ async function route(method, path, body, user, query = new URLSearchParams()) {
   if (seg[0] === "companies" && seg.length === 3 && seg[2] === "lookup") return lookupRoutes(method, seg[1], body, user);
   if (seg[0] === "companies" && seg.length === 3 && seg[2] === "ai-score" && method === "POST") return aiScoreRoute(seg[1], user);
   if (method === "GET" && path === "/ai/usage") return aiUsage();
+  if (seg[0] === "companies" && seg.length === 3 && seg[2] === "prep" && method === "POST") return prepRoute(seg[1], user);
   if (seg[0] === "proposals") return proposals().authed(method, seg, body, user);
   if (seg[0] === "quotes" || (seg[0] === "settings" && seg[1] === "quote")) return quotes().authed(method, seg, body, user);
 
@@ -748,6 +777,10 @@ async function route(method, path, body, user, query = new URLSearchParams()) {
         activities: children.filter((c) => c.sk.startsWith("ACT#")).map(strip),
         aiScore: (() => {
           const a = children.find((c) => c.sk === "AISCORE");
+          return a ? strip(a) : null;
+        })(),
+        prep: (() => {
+          const a = children.find((c) => c.sk === "PREP");
           return a ? strip(a) : null;
         })(),
         deals,

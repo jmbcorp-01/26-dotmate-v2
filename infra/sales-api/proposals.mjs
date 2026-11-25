@@ -116,6 +116,7 @@ export function makeProposalRoutes({ db, TABLE, HttpError, GetCommand, PutComman
         template,
         activities: children.filter((c) => c.sk.startsWith("ACT#")),
         aiScore: children.find((c) => c.sk === "AISCORE"),
+        prep: children.find((c) => c.sk === "PREP"),
       });
       const blocks = cleanBlocks(draft.blocks);
       const item = { ...prev, blocks, flags: Object.fromEntries(Object.keys(blocks).map((k) => [k, true])), aiModel: draft.model, aiAt: now() };
