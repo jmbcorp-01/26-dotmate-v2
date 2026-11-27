@@ -46,7 +46,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#ffffff",
+  themeColor: "#050506",
 };
 
 const orgLd = {
@@ -98,11 +98,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               "(function(){try{if(window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;var r=document.documentElement;r.classList.add('js-motion');setTimeout(function(){if(!window.__motionReady)r.classList.remove('js-motion')},3000)}catch(e){}})();",
           }}
         />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        {/* 라벨용 고정폭 글꼴. 불러오지 못하면 시스템 고정폭 글꼴로 보입니다. */}
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" />
         <JsonLd data={orgLd} />
       </head>
       <body>
         <Header />
-        <main>{children}</main>
+        <main id="main">{children}</main>
         <Footer />
         <Motion />
       </body>

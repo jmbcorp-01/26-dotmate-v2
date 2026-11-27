@@ -71,20 +71,23 @@ export default async function CasePage({ params }: Props) {
   return (
     <>
       <JsonLd data={ld} />
-      <section className="case-hero">
+      <section className="page-head case-head">
         <div className="wrap">
-          <Link href="/portfolio/" className="case-back">
-            <span aria-hidden="true">‹</span> 포트폴리오
+          <Link href="/portfolio/" className="case-back mono">
+            <span aria-hidden="true">←</span> 포트폴리오
           </Link>
-          <div className="case-head">
-            <div className="pf-meta">
-              {svc ? <AxName name={svc.name} /> : <span className="pf-cat">{p.category}</span>}
-              {p.ax && <span className="pf-badge">AX 전환</span>}
-              {p.status && <span className="pf-badge pf-badge-status">{p.status}</span>}
-            </div>
-            <h1>{p.title}</h1>
-            <p className="hero-sub">{p.summary}</p>
+          <div className="pf-meta">
+            {svc ? <AxName name={svc.name} /> : <span className="ax-name">{p.category}</span>}
+            {p.ax && <span className="badge">AX 전환</span>}
+            {p.status && <span className="badge">{p.status}</span>}
           </div>
+          <h1>{p.title}</h1>
+          <p className="lead">{p.summary}</p>
+        </div>
+      </section>
+
+      <section className="sec">
+        <div className="wrap">
           <dl className="case-facts">
             <div>
               <dt>고객사</dt>
@@ -106,7 +109,7 @@ export default async function CasePage({ params }: Props) {
               <dt>사이트</dt>
               <dd>
                 {p.url ? (
-                  <a href={p.url} target="_blank" rel="noopener noreferrer" className="case-site">
+                  <a href={p.url} target="_blank" rel="noopener noreferrer">
                     {p.url.replace(/^https?:\/\//, "").replace(/\/$/, "")} <span aria-hidden="true">↗</span>
                   </a>
                 ) : (
@@ -117,26 +120,36 @@ export default async function CasePage({ params }: Props) {
           </dl>
           {p.image && (
             <figure className="case-figure">
-              <img src={p.image} alt={`${p.client} ${p.title} 대표 화면`} />
+              <div className="reel-frame" data-reel>
+                <img src={p.image} alt={`${p.client} ${p.title} 대표 화면`} />
+              </div>
               {p.imageNote && <figcaption className="muted">{p.imageNote}</figcaption>}
             </figure>
           )}
         </div>
       </section>
 
-      <section className="compare">
+      <section className="sec">
         <div className="wrap">
-          <div className="compare-grid">
-            <div className="compare-col before">
-              <p className="compare-label">고객이 겪던 문제</p>
+          <div className="sec-top rv">
+            <h2>
+              무엇이 문제였고,
+              <br />
+              무엇을 바꿨나요.
+            </h2>
+            <span className="mono">Problem / Solution</span>
+          </div>
+          <div className="ps-grid">
+            <div className="b rv">
+              <h3 className="mono">고객이 겪던 문제</h3>
               <ul>
                 {p.problem.map((t) => (
                   <li key={t}>{t}</li>
                 ))}
               </ul>
             </div>
-            <div className="compare-col after">
-              <p className="compare-label">닷메이트가 바꾼 점</p>
+            <div className="a rv">
+              <h3 className="mono">닷메이트가 바꾼 점</h3>
               <ul>
                 {p.solution.map((t) => (
                   <li key={t}>{t}</li>
@@ -147,81 +160,102 @@ export default async function CasePage({ params }: Props) {
         </div>
       </section>
 
-      <section className="case-results">
+      <section className="sec">
         <div className="wrap">
-          <h2 className="section-title">성과</h2>
+          <div className="sec-top rv">
+            <h2>성과</h2>
+            <span className="mono">Results</span>
+          </div>
           {p.metrics && p.metrics.length > 0 && (
             <div className="case-metrics">
               {p.metrics.map((m) => (
-                <div key={m.label} className="stat">
-                  <div className="stat-value">{m.value}</div>
-                  <div className="stat-label">{m.label}</div>
+                <div key={m.label} className="rv">
+                  <b className="num">{m.value}</b>
+                  <span>{m.label}</span>
                 </div>
               ))}
             </div>
           )}
-          <ul className="fit-list case-result-list">
-            {p.results.map((r) => (
-              <li key={r}>{r}</li>
+          <ol className="result-list">
+            {p.results.map((r, i) => (
+              <li key={r} className="rv">
+                <span className="mono">{String(i + 1).padStart(2, "0")}</span>
+                {r}
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      <section className="sec">
+        <div className="wrap">
+          <div className="sec-top rv">
+            <h2>사용 기술과 AI 적용</h2>
+            <span className="mono">Build</span>
+          </div>
+          <ul className="build-grid">
+            {p.tech.map((t, i) => (
+              <li key={t.title} className="rv">
+                <span className="mono">{String(i + 1).padStart(2, "0")}</span>
+                <h3>{t.title}</h3>
+                <p>{t.body}</p>
+              </li>
             ))}
           </ul>
         </div>
       </section>
 
-      <section className="build case-tech">
-        <div className="wrap">
-          <h2 className="section-title">사용 기술과 AI 적용</h2>
-          <div className="build-grid">
-            {p.tech.map((t) => (
-              <div key={t.title} className="build-item">
-                <h3>{t.title}</h3>
-                <p>{t.body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {p.testimonial && (
-        <section className="case-quote">
+        <section className="sec case-quote">
           <div className="wrap">
-            <figure>
+            <figure className="rv">
               <blockquote>
-                <p>{p.testimonial.quote}</p>
+                <p>“{p.testimonial.quote}”</p>
               </blockquote>
-              <figcaption>{p.testimonial.author}</figcaption>
+              <figcaption className="mono">{p.testimonial.author}</figcaption>
             </figure>
           </div>
         </section>
       )}
 
       {p.note && (
-        <div className="wrap">
+        <div className="wrap sec">
           <p className="case-note muted">{p.note}</p>
         </div>
       )}
 
       {others.length > 0 && (
-        <section className="others">
+        <section className="sec">
           <div className="wrap">
-            <p className="others-title">다른 사례</p>
-            <div className="others-row">
-              {others.map((o) => (
-                <Link key={o.slug} href={`/portfolio/${o.slug}/`} className="others-link">
-                  <span className="others-case">{o.title}</span>
-                  <span className="muted">
-                    {o.client} · {o.category}
-                  </span>
-                </Link>
-              ))}
+            <div className="sec-top rv">
+              <h2>다른 사례</h2>
+              <Link href="/portfolio/" className="mono">
+                전체 보기 →
+              </Link>
             </div>
+            <ul className="work-list">
+              {others.map((o) => (
+                <li key={o.slug}>
+                  <Link href={`/portfolio/${o.slug}/`}>
+                    <span className="th" aria-hidden="true">
+                      {(o.image ?? o.thumb) && <img src={o.image ?? o.thumb} alt="" loading="lazy" />}
+                    </span>
+                    <span className="cl">{o.client}</span>
+                    <span className="ct">{o.title}</span>
+                    <span className="yr mono">
+                      {o.year} · {o.category}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
       )}
 
       <CtaBand
-        title={svc ? `우리 ${svc.system}도|이렇게 바뀔 수 있을까요?` : "우리 회사 업무도|이렇게 바뀔 수 있을까요?"}
-        body="지금 쓰는 시스템을 알려주시면,|바뀌는 업무와 예상 비용을 무료로 정리해 드립니다."
+        title={svc ? `우리 ${svc.system}도|이렇게 바뀔 수|있을까요?` : "우리 회사 업무도|이렇게 바뀔 수|있을까요?"}
+        body="지금 쓰는 시스템을 알려주시면,|바뀌는 업무와 예상 비용을|무료로 정리해 드립니다."
       />
     </>
   );

@@ -20,6 +20,7 @@ const remedies = [
 
 export default function PrivacyPage() {
   return (
+    <div className="paper">
     <section className="policy">
       <div className="wrap policy-inner">
         <h1>개인정보 처리방침</h1>
@@ -166,5 +167,6 @@ export default function PrivacyPage() {
         </article>
       </div>
     </section>
+    </div>
   );
 }
