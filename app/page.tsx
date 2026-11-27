@@ -179,7 +179,7 @@ export default function Home() {
           </div>
           <ul className="work-list" data-peek>
             {works.map((p) => {
-              const img = p.image ?? p.thumb;
+              const img = p.thumb ?? p.image;
               return (
                 <li key={p.slug}>
                   <Link href={`/portfolio/${p.slug}/`} data-img={img}>
@@ -199,7 +199,7 @@ export default function Home() {
         </div>
       </section>
       <div className="peek" aria-hidden="true">
-        <img alt="" src={works[0]?.image ?? ""} />
+        <img alt="" src={works[0]?.thumb ?? works[0]?.image ?? ""} />
       </div>
 
       <section className="sec nums" aria-label="숫자로 보는 성과">

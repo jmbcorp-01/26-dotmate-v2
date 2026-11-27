@@ -51,10 +51,10 @@ export default function PortfolioPage() {
           ) : (
             <div className="pf-grid">
               {sorted.map((p) => {
-                const img = p.image ?? p.thumb;
+                const img = p.thumb ?? p.image;
                 return (
                   <Link key={p.slug} href={`/portfolio/${p.slug}/`} className="pf-card rv">
-                    <div className="ph">{img && <img src={img} alt={`${p.client} ${p.title}`} loading="lazy" />}</div>
+                    <div className="ph">{img && <img src={img} alt={`${p.client} 로고`} loading="lazy" />}</div>
                     <div className="pf-meta">
                       {p.service ? <AxName name={nameOf(p.service)} /> : <span className="ax-name">{p.category}</span>}
                       <span className="muted">
