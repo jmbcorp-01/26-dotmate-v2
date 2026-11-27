@@ -19,6 +19,7 @@ const gets = [
 
 export default function DiagnosisPage() {
   return (
+    <div className="paper">
     <section className="diag">
       <div className="wrap diag-inner">
         <div className="diag-intro">
@@ -36,5 +37,6 @@ export default function DiagnosisPage() {
         <DiagnosisForm />
       </div>
     </section>
+    </div>
   );
 }

@@ -21,19 +21,20 @@ export default function PortfolioPage() {
 
   return (
     <>
-      <section className="svc-hero">
-        <div className="wrap svc-hero-inner">
-          <p className="hero-kicker">포트폴리오</p>
+      <section className="page-head">
+        <div className="wrap">
+          <p className="mono hero-kicker">포트폴리오 · 공개 사례 {sorted.length}건</p>
           <h1>
-            <Phrase text="시스템을 만들어 온 팀이|AI로 다시 만듭니다." />
+            <span className="line">시스템을 만들어 온 팀이</span>
+            <span className="line">AI로 다시 만듭니다.</span>
           </h1>
-          <p className="hero-sub">
+          <p className="lead">
             <Phrase text="문제가 무엇이었고, 무엇을 바꿨고,|어떤 결과가 났는지 정리했습니다." />
           </p>
         </div>
       </section>
 
-      <section className="portfolio">
+      <section className="sec">
         <div className="wrap">
           {sorted.length === 0 ? (
             <div className="pf-empty">
@@ -43,42 +44,36 @@ export default function PortfolioPage() {
               <p>
                 <Phrase text="곧 이곳에 구축 사례와 AX 전환 사례를 올립니다.|비슷한 업종의 사례가 궁금하시면 진단 신청 때 남겨 주세요." />
               </p>
-              <Link href="/diagnosis/" className="text-link">
-                무료 진단 신청하기 <span aria-hidden="true">›</span>
+              <Link href="/diagnosis/" className="btn">
+                무료 진단 신청하기 <span aria-hidden="true">→</span>
               </Link>
             </div>
           ) : (
             <div className="pf-grid">
-              {sorted.map((p) => (
-                <Link key={p.slug} href={`/portfolio/${p.slug}/`} className="pf-card">
-                  <div className="pf-thumb">
-                    {p.thumb || p.image ? (
-                      <img src={p.thumb ?? p.image} alt={`${p.client} ${p.title}`} loading="lazy" />
-                    ) : (
-                      <span>{p.client}</span>
-                    )}
-                  </div>
-                  <div className="pf-meta">
-                    {p.service ? <AxName name={nameOf(p.service)} /> : <span className="pf-cat">{p.category}</span>}
-                    <span className="muted">
-                      {p.client} · {p.period}
-                    </span>
-                    {p.ax && <span className="pf-badge">AX 전환</span>}
-                    {p.status && <span className="pf-badge pf-badge-status">{p.status}</span>}
-                  </div>
-                  <h3>{p.title}</h3>
-                  <p className="muted">{p.summary}</p>
-                  <span className="pf-more">
-                    사례 자세히 보기 <span aria-hidden="true">›</span>
-                  </span>
-                </Link>
-              ))}
+              {sorted.map((p) => {
+                const img = p.image ?? p.thumb;
+                return (
+                  <Link key={p.slug} href={`/portfolio/${p.slug}/`} className="pf-card rv">
+                    <div className="ph">{img && <img src={img} alt={`${p.client} ${p.title}`} loading="lazy" />}</div>
+                    <div className="pf-meta">
+                      {p.service ? <AxName name={nameOf(p.service)} /> : <span className="ax-name">{p.category}</span>}
+                      <span className="muted">
+                        {p.client} · {p.period}
+                      </span>
+                      {p.ax && <span className="badge">AX 전환</span>}
+                      {p.status && <span className="badge">{p.status}</span>}
+                    </div>
+                    <h3>{p.title}</h3>
+                    <p>{p.summary}</p>
+                  </Link>
+                );
+              })}
             </div>
           )}
         </div>
       </section>
 
-      <CtaBand title="우리 회사도|이렇게 바뀔 수 있을까요?" body="지금 쓰는 시스템을 알려주시면,|바뀌는 업무와 예상 비용을 무료로 정리해 드립니다." />
+      <CtaBand title="우리 회사도|이렇게 바뀔 수|있을까요?" body="지금 쓰는 시스템을 알려주시면,|바뀌는 업무와 예상 비용을|무료로 정리해 드립니다." />
     </>
   );
 }
