@@ -201,7 +201,7 @@ html[data-menu-open] { overflow: hidden; }
 
 /* 대표 사례: 스크롤하면 화면 가득 커짐 */
 .reel-frame {
-  position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 28px;
+  position: relative; width: 100%; aspect-ratio: 16 / 10; overflow: hidden; border-radius: 28px;
   transform-origin: center top; will-change: transform; background: #111;
 }
 .reel-frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; will-change: transform; }
@@ -299,7 +299,7 @@ html[data-menu-open] { overflow: hidden; }
 
 .feature { display: block; }
 .pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 56px; margin-top: 140px; }
-.card .ph { aspect-ratio: 16 / 10; border-radius: 18px; overflow: hidden; margin-bottom: 28px; background: #111; }
+.card .ph { aspect-ratio: 16 / 10; border-radius: 18px; overflow: hidden; margin-bottom: 28px; background: #ececef; }
 .card .ph img { width: 100%; height: 100%; object-fit: cover; transition: transform 1.2s cubic-bezier(.2, .7, .2, 1); }
 .card:hover .ph img { transform: scale(1.04); }
 .card .mono { display: block; margin-bottom: 12px; }
@@ -317,7 +317,7 @@ html[data-menu-open] { overflow: hidden; }
 
 /* 포트폴리오 */
 .pf-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 120px 56px; }
-.pf-card .ph { aspect-ratio: 16 / 10; border-radius: 18px; overflow: hidden; margin-bottom: 28px; background: #111; }
+.pf-card .ph { aspect-ratio: 16 / 10; border-radius: 18px; overflow: hidden; margin-bottom: 28px; background: #ececef; }
 .pf-card .ph img { width: 100%; height: 100%; object-fit: cover; transition: transform 1.2s cubic-bezier(.2, .7, .2, 1); }
 .pf-card:hover .ph img { transform: scale(1.04); }
 .pf-meta { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-bottom: 14px; font-size: 14px; }

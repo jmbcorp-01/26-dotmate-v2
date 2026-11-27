@@ -186,7 +186,7 @@ export default async function ServicePage({ params }: Props) {
             </div>
             <Link href={`/portfolio/${feature.slug}/`} className="feature">
               <div className="reel-frame" data-reel>
-                <img src={feature.image ?? feature.thumb} alt={`${feature.client} ${feature.category} 화면`} />
+                <img src={feature.thumb ?? feature.image} alt={`${feature.client} 로고`} />
               </div>
               <div className="reel-cap">
                 <div>
@@ -212,7 +212,7 @@ export default async function ServicePage({ params }: Props) {
                 {rest.map((p) => (
                   <Link key={p.slug} href={`/portfolio/${p.slug}/`} className="card rv">
                     <div className="ph">
-                      <img src={p.image ?? p.thumb} alt={`${p.client} ${p.category} 화면`} loading="lazy" />
+                      <img src={p.thumb ?? p.image} alt={`${p.client} 로고`} loading="lazy" />
                     </div>
                     <p className="mono">
                       {p.client} · {p.industry}

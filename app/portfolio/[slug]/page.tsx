@@ -238,7 +238,7 @@ export default async function CasePage({ params }: Props) {
                 <li key={o.slug}>
                   <Link href={`/portfolio/${o.slug}/`}>
                     <span className="th" aria-hidden="true">
-                      {(o.image ?? o.thumb) && <img src={o.image ?? o.thumb} alt="" loading="lazy" />}
+                      {(o.thumb ?? o.image) && <img src={o.thumb ?? o.image} alt="" loading="lazy" />}
                     </span>
                     <span className="cl">{o.client}</span>
                     <span className="ct">{o.title}</span>
